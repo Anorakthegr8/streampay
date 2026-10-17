@@ -78,6 +78,29 @@ read each stream's `status` for lifecycle state.
 
 Creating a stream requires a prior token approval: `token.approve(sender, <contract id>, deposit, exp)`. All failures return typed `StreamError` codes (no panics) — see `contracts/streaming-payments/src/errors.rs`.
 
+## Client SDKs
+
+Typed clients are generated from one canonical contract spec for Rust,
+TypeScript, and Python — typed entrypoints, contract-event decoding, and index
+pagination helpers, with a shared conformance-vector suite that CI runs across
+all three decoders.
+
+| SDK | Package | Quickstart |
+|---|---|---|
+| Rust | `streampay-sdk` | [`sdks/rust`](./sdks/rust) |
+| TypeScript | `@streampay/sdk` | [`sdks/typescript`](./sdks/typescript) |
+| Python | `streampay-sdk` | [`sdks/python`](./sdks/python) |
+
+```bash
+make -C sdks generate      # spec -> generated clients
+make -C sdks test          # unit + conformance tests for all three
+make -C sdks conformance   # cross-language decode check
+```
+
+The spec is the contract: a schema guard diffs the spec IR against the Rust
+sources, and a sha256 fingerprint is embedded in every client and fixture. See
+[`sdks/README.md`](./sdks/README.md) for generation, versioning, and publishing.
+
 ## Getting started (clean machine)
 
 Prerequisites:
@@ -130,6 +153,7 @@ stellar contract deploy \
 ```text
 contracts/streaming-payments/   the contract (lib.rs, stream.rs, errors.rs, events.rs, test.rs)
 frontend/                       minimal Next.js UI (Freighter wallet)
+sdks/                           spec-generated Rust / TypeScript / Python clients
 fuzz/                           cargo-fuzz harness for the accrual math (own workspace)
 scripts/deploy_testnet.sh       one-command testnet demo
 docs/ARCHITECTURE.md            design deep-dive
