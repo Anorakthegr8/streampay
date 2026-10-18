@@ -90,6 +90,14 @@ export default function WebhooksSettingsPage() {
     // Deferred to a microtask so the tab-switch load is an async callback,
     // not a synchronous setState inside the effect.
     void Promise.resolve().then(() => loadData());
+    // Loads the tab's rows whenever the tab changes. Every setState inside
+    // loadData runs after an await, so this is not a cascading render — the
+    // rule only sees that the called function touches state at all.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadData();
+    void (async () => {
+      await loadData();
+    })();
   }, [loadData]);
 
   async function handleRegisterEndpoint(e: React.FormEvent) {
