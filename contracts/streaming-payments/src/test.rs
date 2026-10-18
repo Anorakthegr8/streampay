@@ -128,6 +128,26 @@ impl Fixture {
     pub(crate) fn advance_time(&self, seconds: u64) {
         self.env.ledger().with_mut(|li| li.timestamp += seconds);
     }
+
+    /// Current ledger timestamp — the contract's only source of "now".
+    pub(crate) fn ledger_time(&self) -> u64 {
+        self.env.ledger().timestamp()
+    }
+
+    /// Pin the ledger clock to an absolute timestamp. Models a read the
+    /// frontend believes happened at a known ledger moment (as-of anchor).
+    pub(crate) fn set_ledger_time(&self, timestamp: u64) {
+        self.env.ledger().with_mut(|li| li.timestamp = timestamp);
+    }
+
+    /// Shift the ledger clock by signed seconds, saturating at zero. Lets a
+    /// test run the ledger *behind* a client-supplied time to reproduce clock
+    /// skew between `Date.now()` and `ledger().timestamp()`.
+    pub(crate) fn offset_ledger_time(&self, offset: i64) {
+        self.env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add_signed(offset);
+        });
+    }
 }
 
 // ------------------------------------------------------------ creation ------

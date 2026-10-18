@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAddress, isConnected } from "@stellar/freighter-api";
 import {
   cancelStream,
@@ -13,7 +13,12 @@ import {
   withdrawMaxFromStream,
   type StreamView,
 } from "@/lib/stellar";
-import { computeAvailable, StreamSnapshot } from "@/lib/accrual";
+import {
+  INITIAL_STATE,
+  startLiveAccrual,
+  type LiveAccrual,
+  type LiveAccrualState,
+} from "@/lib/live-accrual";
 import { useToast } from "@/components/toast";
 
 function fmtUnits(v: bigint): string {
@@ -26,60 +31,43 @@ export default function StreamDetail() {
   const id = params?.id ?? "";
 
   const [stream, setStream] = useState<StreamView | null>(null);
-  const [available, setAvailable] = useState<bigint | null>(null);
-  const [displayAvailable, setDisplayAvailable] = useState<bigint | null>(
-    null
-  );
-  const [snapshot, setSnapshot] = useState<StreamSnapshot | null>(null);
+  const [live, setLive] = useState<LiveAccrualState>(INITIAL_STATE);
   const [amount, setAmount] = useState<string>("");
   const [address, setAddress] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string>("");
+  const engineRef = useRef<LiveAccrual | null>(null);
 
-  const reload = useCallback(async () => {
+  useEffect(() => {
     if (!id) return;
-    try {
-      const [s, a] = await Promise.all([readStream(id), readAvailable(id)]);
-      setStream(s);
-      setAvailable(a);
-      setSnapshot({
-        deposit: BigInt(s.deposit),
-        startTime: s.startTime,
-        endTime: s.endTime,
-        withdrawn: BigInt(s.withdrawn),
-        status: s.status,
-      });
-      setLoadError("");
-    } catch (e) {
-      const msg = describeError(e);
-      setLoadError(msg);
-      toast.error(msg);
-    }
-  }, [id, toast]);
+    const engine = startLiveAccrual({
+      readStream: async () => {
+        const s = await readStream(id);
+        setStream(s);
+        return {
+          deposit: BigInt(s.deposit),
+          startTime: s.startTime,
+          endTime: s.endTime,
+          withdrawn: BigInt(s.withdrawn),
+          status: s.status,
+        };
+      },
+      readAvailable: () => readAvailable(id),
+      onUpdate: setLive,
+    });
+    engineRef.current = engine;
+    return () => {
+      engineRef.current = null;
+      engine.stop();
+    };
+  }, [id]);
+
+  const available = live.available;
+  const snapshot = live.snapshot;
+  const displayAvailable = live.displayAvailable;
+  const loadError = live.error ? describeError(live.error) : "";
 
   useEffect(() => {
-    void (async () => {
-      await reload();
-    })();
-    const t = setInterval(() => void reload(), 15_000); // live accrual
-    return () => clearInterval(t);
-  }, [reload]);
-
-  useEffect(() => {
-    if (!snapshot) return;
-    const timer = setInterval(() => {
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      const next = computeAvailable(
-        snapshot.deposit,
-        snapshot.startTime,
-        snapshot.endTime,
-        snapshot.withdrawn,
-        snapshot.status,
-        now
-      );
-      setDisplayAvailable(next);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [snapshot]);
+    if (live.error) toast.error(describeError(live.error));
+  }, [live.error, toast]);
 
   useEffect(() => {
     void (async () => {
@@ -138,7 +126,7 @@ export default function StreamDetail() {
         toast.success("Withdrawal sent.");
       }
       setAmount("");
-      await reload();
+      await engineRef.current?.refresh();
     } catch (e) {
       toast.error(describeError(e));
     }
@@ -149,7 +137,7 @@ export default function StreamDetail() {
     try {
       await cancelStream(address, stream!.id);
       toast.success("Stream cancelled.");
-      await reload();
+      await engineRef.current?.refresh();
     } catch (e) {
       toast.error(describeError(e));
     }

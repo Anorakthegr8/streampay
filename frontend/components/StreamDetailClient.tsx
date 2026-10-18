@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { readAvailableAction, readStreamAction } from "@/app/actions";
 import { describeError } from "@/lib/errors";
-import { computeAvailable, type StreamSnapshot } from "@/lib/accrual";
+import { type StreamSnapshot } from "@/lib/accrual";
+import {
+  INITIAL_STATE,
+  startLiveAccrual,
+  type LiveAccrual,
+  type LiveAccrualState,
+} from "@/lib/live-accrual";
 import type { StreamView } from "@/lib/stream-types";
 
 function fmtUnits(value: bigint): string {
@@ -28,15 +34,12 @@ export default function StreamDetailClient({
 }) {
   const id = initialStream.id;
   const [stream, setStream] = useState<StreamView>(initialStream);
-  const [available, setAvailable] = useState<bigint | null>(null);
-  const [displayAvailable, setDisplayAvailable] = useState<bigint | null>(null);
-  const [snapshot, setSnapshot] = useState<StreamSnapshot>(() =>
-    snapshotFromStream(initialStream)
-  );
+  const [live, setLive] = useState<LiveAccrualState>(INITIAL_STATE);
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState("");
-  const [error, setError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const engineRef = useRef<LiveAccrual | null>(null);
 
   // -------------------------------------------------------------------------
   // Live-region throttle: announce the accrued balance to screen readers at
@@ -58,68 +61,50 @@ export default function StreamDetailClient({
   const tableCapId = useId();
   const progressId = useId();
 
-  const applyStream = useCallback((next: StreamView) => {
-    setStream(next);
-    setSnapshot(snapshotFromStream(next));
-  }, []);
+  useEffect(() => {
+    const engine = startLiveAccrual({
+      readStream: async () => {
+        const next = await readStreamAction(id);
+        setStream(next);
+        return snapshotFromStream(next);
+      },
+      readAvailable: async () => BigInt(await readAvailableAction(id)),
+      onUpdate: setLive,
+    });
+    engineRef.current = engine;
+    return () => {
+      engineRef.current = null;
+      engine.stop();
+    };
+  }, [id]);
 
-  const reload = useCallback(async () => {
-    try {
-      const [nextStream, nextAvailable] = await Promise.all([
-        readStreamAction(id),
-        readAvailableAction(id),
-      ]);
-      applyStream(nextStream);
-      setAvailable(BigInt(nextAvailable));
-      setError("");
-    } catch (e) {
-      setError(describeError(e));
+  const available = live.available;
+  const displayAvailable = live.displayAvailable;
+  const snapshot = live.snapshot ?? snapshotFromStream(initialStream);
+  const error =
+    (live.error ? describeError(live.error) : "") || actionError;
+
+  // Polite live-region announcements of the accrued balance, throttled to at
+  // most once every 5 seconds (WCAG 1.4.13).
+  useEffect(() => {
+    const value = live.displayAvailable;
+    const el = announceRef.current;
+    if (value === null || el === null || snapshot.status !== "Active") return;
+    if (lastAnnouncedRef.current !== null && lastAnnouncedRef.current === value) {
+      return;
     }
-  }, [applyStream, id]);
-
-  useEffect(() => {
-    void readAvailableAction(id)
-      .then((value) => setAvailable(BigInt(value)))
-      .catch((e: unknown) => setError(describeError(e)));
-    const timer = setInterval(() => void reload(), 15_000);
-    return () => clearInterval(timer);
-  }, [id, reload]);
-
-  // 1-second local interpolation of accrued balance
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      const next = computeAvailable(
-        snapshot.deposit,
-        snapshot.startTime,
-        snapshot.endTime,
-        snapshot.withdrawn,
-        snapshot.status,
-        now
-      );
-      setDisplayAvailable(next);
-
-      // Throttled screen-reader announcement (polite, every 5 s)
-      if (
-        announceRef.current &&
-        snapshot.status === "Active" &&
-        (lastAnnouncedRef.current === null || lastAnnouncedRef.current !== next) &&
-        Date.now() - lastAnnounceTimeRef.current >= ANNOUNCE_THROTTLE_MS
-      ) {
-        lastAnnouncedRef.current = next;
-        lastAnnounceTimeRef.current = Date.now();
-        // Clear first so the mutation fires even if text is identical
-        announceRef.current.textContent = "";
-        // Use rAF to let the clear flush before setting the new text
-        requestAnimationFrame(() => {
-          if (announceRef.current) {
-            announceRef.current.textContent = `Available balance: ${next.toLocaleString()} units`;
-          }
-        });
+    if (Date.now() - lastAnnounceTimeRef.current < ANNOUNCE_THROTTLE_MS) return;
+    lastAnnouncedRef.current = value;
+    lastAnnounceTimeRef.current = Date.now();
+    // Clear first so the mutation fires even if text is identical
+    el.textContent = "";
+    // Use rAF to let the clear flush before setting the new text
+    requestAnimationFrame(() => {
+      if (announceRef.current) {
+        announceRef.current.textContent = `Available balance: ${value.toLocaleString()} units`;
       }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [snapshot]);
+    });
+  }, [live.displayAvailable, live.snapshot, snapshot.status]);
 
   useEffect(() => {
     void (async () => {
@@ -152,7 +137,7 @@ export default function StreamDetailClient({
 
   async function doWithdraw(max: boolean) {
     if (!address) return;
-    setError("");
+    setActionError("");
     setStatus("");
     try {
       if (max) {
@@ -161,7 +146,7 @@ export default function StreamDetailClient({
         setStatus(`Claimed ${fmtUnits(paid)} units.`);
       } else {
         if (overWithdrawal) {
-          setError(
+          setActionError(
             `Amount exceeds the accrued balance (${available?.toString()} units). Try "Withdraw max".`
           );
           return;
@@ -171,22 +156,22 @@ export default function StreamDetailClient({
         setStatus("Withdrawal sent.");
       }
       setAmount("");
-      await reload();
+      await engineRef.current?.refresh();
     } catch (e) {
-      setError(describeError(e));
+      setActionError(describeError(e));
     }
   }
 
   async function doCancel() {
     if (!address) return;
-    setError("");
+    setActionError("");
     try {
       const { cancelStream } = await import("@/lib/stellar");
       await cancelStream(address, stream.id);
       setStatus("Stream cancelled.");
-      await reload();
+      await engineRef.current?.refresh();
     } catch (e) {
-      setError(describeError(e));
+      setActionError(describeError(e));
     }
   }
 
