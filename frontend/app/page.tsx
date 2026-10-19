@@ -8,6 +8,7 @@ import {
   createStreams,
   withdrawFromStream,
   withdrawMaxFromStream,
+  withdrawAllFromStreams,
   topUpStream,
   cancelStream,
   readStream,
@@ -30,6 +31,7 @@ export default function Home() {
   const [streams, setStreams] = useState<StreamView[]>([]);
   const [lookupId, setLookupId] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [claimAllLoading, setClaimAllLoading] = useState(false);
 
   async function connect() {
     try {
@@ -93,6 +95,50 @@ export default function Home() {
       for (const s of found) saveStreamId(address, s.id);
     } catch (e) {
       toast.error(describeError(e));
+    }
+  }
+
+  async function handleClaimAll() {
+    if (!address) return;
+    setClaimAllLoading(true);
+    try {
+      const res = await withdrawAllFromStreams(address);
+      if (res.successfulStreamIds.length === 0) {
+        if (res.failedStreams.length > 0) {
+          toast.info(
+            `No funds available to claim across ${res.failedStreams.length} stream(s).`
+          );
+        } else {
+          toast.info("No claimable streams found.");
+        }
+      } else {
+        const transferSummaries = await Promise.all(
+          res.transfers.map(async (t) => {
+            try {
+              const meta = await fetchAssetMeta(t.token);
+              return `${formatAmount(t.amount, meta.decimals)} ${meta.code}`;
+            } catch {
+              return `${t.amount} units`;
+            }
+          })
+        );
+        const transferText = transferSummaries.join(", ");
+        let msg = `Successfully claimed ${transferText} across ${res.successfulStreamIds.length} stream(s).`;
+        if (res.failedStreams.length > 0) {
+          msg += ` (${res.failedStreams.length} skipped or non-claimable)`;
+        }
+        if (res.nextOffset !== null) {
+          msg += ` Note: More streams remain (continuation offset ${res.nextOffset}). Click "Claim all" again to process the next page.`;
+        }
+        toast.success(msg);
+        await Promise.all(
+          res.successfulStreamIds.map((id) => refresh(id).catch(() => null))
+        );
+      }
+    } catch (e) {
+      toast.error(describeError(e));
+    } finally {
+      setClaimAllLoading(false);
     }
   }
 
@@ -261,9 +307,22 @@ export default function Home() {
 
       <section className="card">
         <h2>Your streams</h2>
-        <div className="row">
+        <div className="row" style={{ gap: "10px", flexWrap: "wrap" }}>
           <button onClick={discover} title="Scan the on-chain address indexes">
             Discover on-chain
+          </button>
+          <button
+            type="button"
+            onClick={handleClaimAll}
+            disabled={claimAllLoading}
+            title="Claim all accrued funds across all your streams in one transaction"
+            style={{
+              background: "var(--accent, #0ea5e9)",
+              color: "#fff",
+              fontWeight: 600,
+            }}
+          >
+            {claimAllLoading ? "Claiming all..." : "⚡ Claim all"}
           </button>
         </div>
         <StreamList

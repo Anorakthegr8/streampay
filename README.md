@@ -71,6 +71,7 @@ Metrics, alerting stack, and operational diagnosis: [`docs/RUNBOOK.md`](./docs/R
 | `create_streams(sender, inputs: Vec<StreamInput>) → Vec<u64>` | anyone (sender auth required) | one pull per token | `StreamsCreated`; `FeeCharged` per charged stream |
 | `withdraw(stream_id, amount)` | recipient | pays out ≤ accrued | `Withdrawn` |
 | `withdraw_max(stream_id) → i128` | recipient | pays out all accrued, atomically | `Withdrawn` |
+| `withdraw_all(recipient, page_bounds) → WithdrawAllResult` | recipient | batch-withdraws accrued funds, aggregated per asset | `Withdrawn` per stream |
 | `cancel_stream(caller, stream_id)` | sender; recipient iff `cancelable` | pro-rata split, atomic | `StreamCancelled` |
 | `top_up(stream_id, amount)` | sender | pulls added funds | `StreamToppedUp` |
 | `get_stream(stream_id) → Stream` | — (read-only) | — | — |
