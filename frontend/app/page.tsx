@@ -127,6 +127,9 @@ export default function Home() {
             <h1>⚡ StreamPay</h1>
           </div>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+            <Link href="/benchmarks" style={{ color: "var(--accent2)", fontSize: "0.85rem", textDecoration: "none" }}>
+              Benchmarks 📊
+            </Link>
             <Link href="/docs" style={{ color: "#38bdf8", fontSize: "0.85rem", textDecoration: "none" }}>
               API Docs ↗
             </Link>
@@ -168,6 +171,17 @@ export default function Home() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
         <h1>⚡ StreamPay</h1>
         <div style={{ display: "flex", gap: "16px", alignItems: "baseline" }}>
+          <Link
+            href="/benchmarks"
+            style={{
+              color: "var(--accent2)",
+              textDecoration: "none",
+              fontSize: "13px",
+              fontWeight: 600,
+            }}
+          >
+            Benchmarks 📊
+          </Link>
           <a
             href="/simulator"
             style={{
