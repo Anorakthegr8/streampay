@@ -180,6 +180,13 @@ the evidence is the `pre.*.json` / `post.*.json` pair for every read. It needs
 * The suite pins XDR shape, not interpretation: a change that keeps the wire
   form and alters meaning (e.g. re-scaling a rate) is an accrual-behaviour
   question and belongs to the model/differential tests.
+* Field *order* in a `#[contracttype]` struct is wire-neutral and is
+  deliberately not flagged: the host canonicalises symbol-keyed maps, so both
+  the golden blob and a fresh encode present keys sorted by symbol, not by
+  declaration order (verified with a probe: a reordered `Stream` still decoded
+  and re-encoded to byte-identical XDR). Renaming, removing, or changing the
+  type of a field is a real break and is caught — a planted rename of
+  `Stream.withdrawn` made every golden stream record fail to decode.
 * TTL/rent parameters are recorded as the snapshot holds them; eviction behaviour
   is covered by `infra/ttl-sentinel`, not here.
 * `render` is the diffing grammar: adding an `ScVal` variant means extending it
