@@ -140,6 +140,15 @@ impl Fixture {
     pub(crate) fn advance_time(&self, seconds: u64) {
         self.env.ledger().with_mut(|li| li.timestamp += seconds);
     }
+
+    /// Creates an address funded with `DEPOSIT` and pre-approved as a payer.
+    pub(crate) fn fund_payer(&self) -> Address {
+        let payer = Address::generate(&self.env);
+        let sac = StellarAssetClient::new(&self.env, &self.token);
+        sac.mint(&payer, &DEPOSIT);
+        sac.approve(&payer, &self.client.address, &(10 * DEPOSIT), &1_000_000u32);
+        payer
+    }
 }
 
 #[test]

@@ -10,7 +10,7 @@ contracts/streaming-payments/   the Soroban contract (Rust, no_std)
 frontend/                       minimal Next.js + Freighter UI
 indexer/                        TypeScript Soroban event indexer + SQLite REST API
 fuzz/                           cargo-fuzz harness for the accrual math (own workspace)
-docs/                           ARCHITECTURE.md, GOOD_FIRST_ISSUES.md, DEMO.md
+docs/                           ARCHITECTURE.md, adr/ (decision records), DEMO.md
 .github/workflows/              ci.yml, fuzz.yml, release.yml
 ```
 
@@ -84,10 +84,12 @@ lint/typecheck/build when frontend files are touched) are the minimum gate.
   compare typed XDR, not strings.
 - Storage: per-stream state under `DataKey::Stream(id)` with TTL extension on
   mutation and read (see `stream.rs`). Discovery uses the append-only address
-  indexes (`DataKey::RecipientStreams` / `SenderStreams`): they are written
-  **only** by `create_stream`, are advisory (never trust them for auth — the
-  `Stream` entry is the source of truth), and reads paginate with `offset` /
-  `limit` clamped to `MAX_PAGE_SIZE`. Do not add unbounded full-set scans.
+  indexes (`DataKey::RecipientStreams` / `SenderStreams`): they are written by
+  `create_stream` and by an accepted ownership transfer (the new holder's list
+  gains the id; the old holder keeps its historical entry), are advisory
+  (never trust them for auth — the `Stream` entry is the source of truth), and
+  reads paginate with `offset` / `limit` clamped to `MAX_PAGE_SIZE`. Do not add
+  unbounded full-set scans.
 - `#![no_std]` — no allocations where an array or `soroban_sdk::Vec` works.
 - Run `cargo fmt` before committing; CI enforces `--check`.
 
@@ -170,16 +172,45 @@ Three things to know:
 failures, so the full pre-flight is:
 
 ```bash
+npm run codes:check       # StreamError codes + registry wiring: E0081 and unwired codes
 npm run lint:fix          # cargo fmt --all, then commit what it changed
 npm run eol:check         # committed CRLF: the usual cause of a whole-file fmt diff
 cargo clippy --all-targets -- -D warnings
 npm run generated:check
+npm run links:check       # every internal link and #anchor in the docs resolves
 cd frontend && npm run lint && npx tsc --noEmit && npm test && npm run build
 ```
 
 `npm run matrix` chains most of this from the repo root. If every command above
 passes on your branch after merging `main`, CI passes too: the gates are the
 same commands, not CI-only logic.
+
+**Error codes and the registry.** `StreamError` is a wire contract: a code is never
+renumbered, reused, or deleted, and an unreachable variant is *retired* in place
+rather than removed. The two mistakes this causes are appending a code another
+merged PR already took (`E0081: discriminant value assigned to multiple variants`)
+and deleting a variant, which silently invalidates existing clients.
+`npm run codes:check` reads the enum and prints the highest code in use plus the
+next free one, so you never have to guess; CI runs it as the *first* step of the
+Contract job, before the toolchain even installs, so a collision is a
+file/line annotation within seconds instead of a compile error four minutes
+later in two jobs at once.
+
+The same script then checks the registry in `contracts/streaming-payments/src/surface.rs`,
+which maps every rejection branch to the code it returns: a code no branch
+produces (and that is not in `RETIRED_CODES`) and a `Branch::…` name the mapping
+uses without declaring it are the two ways a merge leaves the contract not
+compiling — the red `Devcontainer — wasm build` check that says nothing about
+what to add. Both are reported here with the file, the line and the exact fix
+(`pub enum Branch` variant + an arm in `Branch::error()`). This mirrors the
+contract's own matrix test (`every_error_code_is_produced_or_retired`), which
+asserts the same property after a full build.
+
+**Docs links.** `npm run links:check` fails on a relative link or `#heading`
+anchor that does not resolve, and every failure is emitted as a CI annotation
+with the file, the line, and the closest existing paths — because the usual
+cause is a document that was renamed on `main`. (If your branch predates the
+rename, `docs/ERRORS.md` is now `docs/ERROR_SURFACE.md`.)
 
 If `cargo fmt --all -- --check` fails with a diff covering **every line** of a
 file, that file was committed with CRLF (Windows editors and `core.autocrlf=true`
@@ -190,6 +221,10 @@ normalizes the whole tree without losing your work:
 git add --renormalize .
 git commit -m "chore: normalize line endings to LF"
 ```
+
+If you have no local Rust toolchain at all, the Contract job's Format check
+still does: a failing run regenerates the formatting, uploads it as the
+`fmt-fix-*` artifact, and the annotation says to `git apply fmt-fix.patch`.
 
 ## Branch & PR process
 
@@ -210,6 +245,17 @@ git commit -m "chore: normalize line endings to LF"
    `lib.rs`/`stream.rs` (money-touching code).
 6. Squash-merge with a conventional subject; the squashed subject becomes the
    changelog entry.
+
+## Architecture Decision Records (ADRs)
+
+Significant architectural choices, invariants, or storage/tooling changes are documented as Architecture Decision Records in [`docs/adr/`](./docs/adr/README.md).
+
+- When introducing or altering architectural invariants, create a new record using [`docs/adr/template.md`](./docs/adr/template.md) with the next sequential number.
+- Records are immutable: if superseding a prior decision, mark the previous record as `Superseded by ADR-XXXX` (with a link to the replacement ADR) and link back from the new record.
+- Verify numbering and link integrity locally before opening a PR:
+  ```bash
+  node scripts/check-adrs.mjs
+  ```
 
 ## Good first issues
 
