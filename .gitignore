@@ -58,4 +58,12 @@ sdks/typescript/dist/
 sdks/python/dist/
 sdks/python/build/
 sdks/python/*.egg-info/
+# Campaign output and triage bundles: per-run, versioned on the fuzz-corpus
+# branch instead (see docs/FUZZ_CAMPAIGN.md). fuzz/known/ and
+# fuzz/regressions/ are tracked.
+fuzz/campaign/
+fuzz/triage/
+fuzz/coverage/
+
+# Python bytecode
 __pycache__/
