@@ -1993,6 +1993,9 @@ name = "streampay-contract"
 version = "0.1.0"
 dependencies = [
  "proptest",
+ "serde",
+ "serde_json",
+ "soroban-ledger-snapshot",
  "soroban-sdk",
  "streampay-model",
 ]
