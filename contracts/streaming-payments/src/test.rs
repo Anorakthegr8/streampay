@@ -160,6 +160,8 @@ impl Fixture {
         self.env.ledger().with_mut(|li| {
             li.timestamp = li.timestamp.saturating_add_signed(offset);
         });
+    }
+
     /// Creates an address funded with `DEPOSIT` and pre-approved as a payer.
     pub(crate) fn fund_payer(&self) -> Address {
         let payer = Address::generate(&self.env);

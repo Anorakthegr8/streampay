@@ -38,11 +38,6 @@ export default function StreamDetailClient({
   const [stream, setStream] = useState<StreamView>(initialStream);
   const [live, setLive] = useState<LiveAccrualState>(INITIAL_STATE);
   const [assetMeta, setAssetMeta] = useState<AssetMeta | null>(null);
-  const [available, setAvailable] = useState<bigint | null>(null);
-  const [displayAvailable, setDisplayAvailable] = useState<bigint | null>(null);
-  const [snapshot, setSnapshot] = useState<StreamSnapshot>(() =>
-    snapshotFromStream(initialStream)
-  );
   const [amount, setAmount] = useState("");
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState("");
@@ -173,8 +168,6 @@ export default function StreamDetailClient({
       } else {
         if (overWithdrawal) {
           setActionError(
-            `Amount exceeds the accrued balance (${available?.toString()} units). Try "Withdraw max".`
-          setError(
             `Amount exceeds the accrued balance (${displayValue}). Try "Withdraw max".`
           );
           return;
