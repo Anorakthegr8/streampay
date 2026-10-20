@@ -67,6 +67,8 @@ mod differential_test;
 #[cfg(test)]
 mod error_surface_test;
 mod errors;
+#[cfg(test)]
+mod event_registry;
 mod events;
 mod oracle;
 mod policy;
