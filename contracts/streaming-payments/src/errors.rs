@@ -43,7 +43,7 @@ pub enum StreamError {
     NotStreamRecipient = 3,
     /// The stream is not `cancelable`, so the recipient cannot cancel it.
     StreamNotCancellable = 4,
-    /// The stream is cancelled or depleted; the operation is not permitted.
+    /// The stream is not in a lifecycle state that permits the operation.
     StreamNotActive = 5,
     /// `start_time` is before the current ledger timestamp.
     StartTimeInPast = 6,
@@ -151,6 +151,10 @@ pub enum StreamError {
     BatchEmpty = 47,
     /// Batch creation was requested with more entries than MAX_BATCH.
     BatchTooLarge = 48,
+    /// The caller is not the sender authorized to pause the stream.
+    PauseStreamNotAuthorized = 49,
+    /// The caller is not the sender authorized to resume the stream.
+    ResumeStreamNotAuthorized = 50,
 }
 
 impl StreamError {
@@ -206,6 +210,8 @@ impl StreamError {
         StreamError::PolicyDepositBelowFloor,
         StreamError::BatchEmpty,
         StreamError::BatchTooLarge,
+        StreamError::PauseStreamNotAuthorized,
+        StreamError::ResumeStreamNotAuthorized,
     ];
 
     /// The stable numeric value carried across the contract boundary

@@ -3814,6 +3814,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "82"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -3922,6 +3938,22 @@
                     },
                     "val": {
                       "u64": "2"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "82"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {
@@ -4038,6 +4070,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "80"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -4146,6 +4194,22 @@
                     },
                     "val": {
                       "u64": "4"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "82"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {
@@ -4262,6 +4326,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "121"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -4370,6 +4450,22 @@
                     },
                     "val": {
                       "u64": "6"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "120"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {
@@ -4486,6 +4582,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "120"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -4594,6 +4706,22 @@
                     },
                     "val": {
                       "u64": "8"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "217"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {
@@ -4710,6 +4838,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "245"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -4818,6 +4962,22 @@
                     },
                     "val": {
                       "u64": "10"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "247"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {
@@ -4934,6 +5094,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "311"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -5046,6 +5222,22 @@
                   },
                   {
                     "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "310"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "recipient"
                     },
                     "val": {
@@ -5154,6 +5346,22 @@
                     },
                     "val": {
                       "u64": "13"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "last_resumed_at"
+                    },
+                    "val": {
+                      "u64": "325"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "paused_total"
+                    },
+                    "val": {
+                      "u64": "0"
                     }
                   },
                   {
@@ -5781,6 +5989,357 @@
                     }
                   }
                 ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "1"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "2"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "3"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "4"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "5"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "6"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "7"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "8"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "9"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "10"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "11"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "12"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 500000
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATYON",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "StreamVersion"
+                  },
+                  {
+                    "u64": "13"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "u32": 3
               }
             }
           },

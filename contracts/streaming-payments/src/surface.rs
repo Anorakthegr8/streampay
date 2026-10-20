@@ -56,10 +56,14 @@ pub enum Branch {
     // --------------------------------------------------------------- top_up
     TopUpAmountNonPositive,
     TopUpDepositOverflow,
+    // ------------------------------------------------------- pause / resume
+    PauseStreamNotAuthorized,
+    ResumeStreamNotAuthorized,
     // ------------------------------------------------- shared storage/math
     /// `stream.rs::get_stream` finds no stored entry.
     StreamNotFound,
-    /// A terminal (cancelled/depleted) stream is mutated.
+    /// A terminal (cancelled/depleted) stream is mutated, or a pause/resume
+    /// transition is attempted from the wrong state.
     StreamNotActive,
     /// `validate_capacity`: `deposit * duration` would exceed `u128`.
     CapacityOverflow,
@@ -162,7 +166,7 @@ impl Branch {
     /// Every branch, in declaration order. The matrix test walks this list and
     /// the coverage test requires each [`StreamError`] variant to be produced by
     /// one of these (or retired).
-    pub const ALL: [Branch; 56] = [
+    pub const ALL: [Branch; 58] = [
         Branch::CreateDepositNonPositive,
         Branch::CreateStartTimeInPast,
         Branch::CreateInvalidTimeRange,
@@ -174,6 +178,8 @@ impl Branch {
         Branch::CancelStreamNotAuthorized,
         Branch::TopUpAmountNonPositive,
         Branch::TopUpDepositOverflow,
+        Branch::PauseStreamNotAuthorized,
+        Branch::ResumeStreamNotAuthorized,
         Branch::StreamNotFound,
         Branch::StreamNotActive,
         Branch::CapacityOverflow,
@@ -239,6 +245,8 @@ impl Branch {
                 &["cancel_stream"]
             }
             Branch::TopUpAmountNonPositive | Branch::TopUpDepositOverflow => &["top_up"],
+            Branch::PauseStreamNotAuthorized => &["pause_stream"],
+            Branch::ResumeStreamNotAuthorized => &["resume_stream"],
             Branch::StreamNotFound => &[
                 "get_stream",
                 "available",
@@ -246,8 +254,17 @@ impl Branch {
                 "withdraw_max",
                 "cancel_stream",
                 "top_up",
+                "pause_stream",
+                "resume_stream",
             ],
-            Branch::StreamNotActive => &["withdraw", "withdraw_max", "cancel_stream", "top_up"],
+            Branch::StreamNotActive => &[
+                "withdraw",
+                "withdraw_max",
+                "cancel_stream",
+                "top_up",
+                "pause_stream",
+                "resume_stream",
+            ],
             Branch::CapacityOverflow => &["create_stream", "create_streams", "top_up"],
             Branch::RateProductOverflow => &[
                 "streamed_at",
@@ -347,6 +364,8 @@ impl Branch {
             Branch::CancelStreamNotAuthorized => StreamError::NotAuthorized,
             Branch::TopUpAmountNonPositive => StreamError::ZeroAmount,
             Branch::TopUpDepositOverflow => StreamError::MathOverflow,
+            Branch::PauseStreamNotAuthorized => StreamError::PauseStreamNotAuthorized,
+            Branch::ResumeStreamNotAuthorized => StreamError::ResumeStreamNotAuthorized,
             Branch::StreamNotFound => StreamError::StreamNotFound,
             Branch::StreamNotActive => StreamError::StreamNotActive,
             Branch::CapacityOverflow => StreamError::MathOverflow,
@@ -421,8 +440,12 @@ impl Branch {
             }
             Branch::TopUpAmountNonPositive => "top-up amount is zero or negative",
             Branch::TopUpDepositOverflow => "deposit + amount would overflow i128",
+            Branch::PauseStreamNotAuthorized => "the caller is not the stream sender",
+            Branch::ResumeStreamNotAuthorized => "the caller is not the stream sender",
             Branch::StreamNotFound => "no stream is stored under the id",
-            Branch::StreamNotActive => "the stream status is Cancelled or Depleted",
+            Branch::StreamNotActive => {
+                "the stream status does not permit the requested lifecycle operation"
+            }
             Branch::CapacityOverflow => "deposit * duration would overflow u128",
             Branch::RateProductOverflow => "deposit * elapsed would overflow u128",
             Branch::AvailableBalanceOverflow => {

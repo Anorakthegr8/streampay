@@ -179,6 +179,25 @@ fn probe(branch: Branch) -> Option<StreamError> {
                 .mock_all_auths()
                 .try_top_up(&id, &i128::MAX)))
         }
+        Branch::PauseStreamNotAuthorized => {
+            let f = Fixture::setup_quiet();
+            let id = f.create_stream(DEPOSIT, DAY, 10 * DAY, false);
+            let stranger = soroban_sdk::Address::generate(&f.env);
+            Some(rejected!(f
+                .client
+                .mock_all_auths()
+                .try_pause_stream(&stranger, &id)))
+        }
+        Branch::ResumeStreamNotAuthorized => {
+            let f = Fixture::setup_quiet();
+            let id = f.create_stream(DEPOSIT, DAY, 10 * DAY, false);
+            f.client.mock_all_auths().pause_stream(&f.sender, &id);
+            let stranger = soroban_sdk::Address::generate(&f.env);
+            Some(rejected!(f
+                .client
+                .mock_all_auths()
+                .try_resume_stream(&stranger, &id)))
+        }
         // --------------------------------------------- shared storage / math
         Branch::StreamNotFound => {
             let f = Fixture::setup_quiet();
@@ -829,7 +848,9 @@ fn stream_error_variant_list_is_exhaustive() {
             | StreamError::PolicyNotInitialized
             | StreamError::PolicyNoPendingHandoff
             | StreamError::BatchEmpty
-            | StreamError::BatchTooLarge => StreamError::ALL.contains(&e),
+            | StreamError::BatchTooLarge
+            | StreamError::PauseStreamNotAuthorized
+            | StreamError::ResumeStreamNotAuthorized => StreamError::ALL.contains(&e),
             StreamError::ContractFrozen
             | StreamError::ContractNotFrozen
             | StreamError::NoPendingUpgrade

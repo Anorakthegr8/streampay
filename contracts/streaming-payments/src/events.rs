@@ -67,6 +67,22 @@ pub struct StreamToppedUp {
     pub new_deposit: i128,
 }
 
+/// Emitted when a sender pauses accrual for a stream.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PauseStream {
+    #[topic]
+    pub stream_id: u64,
+}
+
+/// Emitted when a sender resumes accrual for a stream.
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResumeStream {
+    #[topic]
+    pub stream_id: u64,
+}
+
 /// Emitted when a sender pre-authorizes a future (optionally recurring)
 /// stream creation and escrows the deposit plus keeper fee budget.
 #[contractevent]

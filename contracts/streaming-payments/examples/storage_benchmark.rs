@@ -232,6 +232,8 @@ fn main() {
         end_time: end,
         cancelable: true,
         status: StreamStatus::Active,
+        paused_total: 0,
+        last_resumed_at: start,
     };
 
     let cold_config = StreamConfigCold {

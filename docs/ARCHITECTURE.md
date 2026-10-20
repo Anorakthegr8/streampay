@@ -12,7 +12,8 @@ reentrancy, TTL strategy, and the design decisions behind the v1 API. Read the
 │                                                                    │
 │  lib.rs      entrypoints: create_stream / create_streams /          │
 │              create_streams_batch / withdraw / withdraw_max /       │
-│              cancel_stream / top_up / get_stream / available /      │
+│              cancel_stream / pause_stream / resume_stream / top_up /│
+│              get_stream / available /                              │
 │              recipient_streams / sender_streams / schedule_stream / │
 │              execute_scheduled / cancel_scheduled / reclaim_expired │
 │              set_fee_bps / nominate_governor / accept_governor /    │
@@ -23,7 +24,8 @@ reentrancy, TTL strategy, and the design decisions behind the v1 API. Read the
 │  treasury.rs protocol-fee math, per-token accounting, governor,    │
 │              verification scan (see §11)                           │
 │  errors.rs   StreamError — stable numeric codes, append-only       │
-│  events.rs   StreamCreated / Withdrawn / StreamCancelled /         │
+│  events.rs   StreamCreated / Withdrawn / StreamCancelled /          │
+│              PauseStream / ResumeStream /                          │
 │              StreamToppedUp / StreamScheduled /                    │
 │              ScheduledStreamExecuted / ScheduledIntentCancelled /  │
 │              ScheduledIntentExpired / FeeCharged / StreamsCreated /│
@@ -39,7 +41,8 @@ reentrancy, TTL strategy, and the design decisions behind the v1 API. Read the
 | Key | Value | Purpose |
 |---|---|---|
 | `DataKey::NextStreamId` | `u64` | monotonic id counter (ids start at 1) |
-| `DataKey::Stream(id)` | `Stream` | full per-stream state |
+| `DataKey::Stream(id)` | `Stream` | full per-stream state, including pause accounting |
+| `DataKey::StreamVersion(id)` | `u32` | marks streams rewritten in the pause-aware v3 shape |
 | `DataKey::RecipientStreams(addr)` | `Vec<u64>` | append-only ids where `addr` receives |
 | `DataKey::SenderStreams(addr)` | `Vec<u64>` | append-only ids created by `addr` |
 | `DataKey::NextIntentId` | `u64` | monotonic scheduled-intent id counter |
@@ -108,7 +111,7 @@ A gas optimization evaluation (`scripts/benchmark_storage.sh`, benchmark harness
 
 #### Storage Layout Decision & Negative Result
 
-1. **Monolithic Layout Retained:** Stream state remains in a single `DataKey::Stream(u64)` persistent entry (~188 bytes XDR).
+1. **Monolithic Stream State Retained:** The full pause-aware `Stream` remains in one `DataKey::Stream(u64)` entry. A small `DataKey::StreamVersion(u64)` marker is also written so the contract can safely decode legacy v2 stream values during migration; v2 profiling below does not include that marker's read/write overhead.
 2. **Negative Result for Hot/Cold Splitting:** In Soroban's storage and metering architecture, ledger entry overhead, storage keys, and per-entry footprint fees heavily outweigh minor payload byte differences. Every mutating entrypoint (`withdraw`, `withdraw_max`, `cancel_stream`, `top_up`) strictly requires both configuration fields (token, deposit, window, recipient/sender authorization) and state fields (`withdrawn`, `status`). Splitting state forces two ledger reads and one write across two keys, incurring a **+57.5% CPU read penalty** and a **+68.5% CPU write penalty** without saving gas on any mutation path.
 3. **Double-Read Elimination:** The contract avoids double reads in `withdraw`: `authorize_withdrawal` loads `s` once and passes `&mut s` directly to `pay_out`, preventing redundant re-reads.
 
@@ -120,6 +123,22 @@ Everything reduces to one pure function (`stream.rs`):
 ```rust
 streamed_at(deposit: i128, duration: u64, elapsed: u64) -> Result<i128, StreamError>
 ```
+
+For a stream with pauses, `elapsed` is active time rather than wall-clock
+time:
+
+```text
+elapsed = effective_now − start_time − paused_total
+```
+
+`effective_now` is the ledger time while Active and `last_resumed_at` while
+Paused (which records the pause boundary until resume). `paused_total` contains
+completed pause intervals; on resume, the current pause interval is added to
+it and `end_time` is shifted by the same number of seconds. Thus
+`end_time − start_time − paused_total` remains the original accrual duration,
+the rate does not change, and the stream's effective end shifts by exactly the
+paused interval. While Paused, `available_amount` stays at the value at that
+boundary, but withdrawals and top-ups remain permitted.
 
 - `elapsed == 0` (before `start_time`) → `0`
 - `elapsed >= duration` (at/after `end_time`) → `deposit`
@@ -156,7 +175,8 @@ nothing has accrued, at `now ≥ end_time` the full duration has elapsed.
 | `create_streams` | anyone; `sender` must authorize once for the batch | sender |
 | `withdraw` | recipient only | recipient |
 | `cancel_stream` | sender always; recipient iff `cancelable` | caller |
-| `top_up` | sender only | sender |
+| `pause_stream` / `resume_stream` | sender only | sender |
+| `top_up` | sender only, while Active or Paused | sender |
 | `schedule_stream` | anyone; `sender` must authorize | sender |
 | `execute_scheduled` | anyone (keeper) | keeper (the caller) |
 | `cancel_scheduled` | intent sender, before the window opens | sender |
@@ -238,13 +258,23 @@ is never part of any stream's `deposit`, so no payout path can reach it.
                  │
                  ├─ withdrawn == deposit ──▶ Depleted (terminal)
                  │
-                 └─ top_up allowed while Active (even after end_time:
-                    funds become fully accrued → recipient withdraws)
+                 ├─ pause_stream ──────────▶ Paused
+                 │                             │
+                 │                             ├─ resume_stream ─▶ Active
+                 │                             ├─ withdraw/top_up
+                 │                             └─ cancel_stream ─▶ Cancelled
+                 │
+                 └─ top_up allowed while Active (even after effective
+                    end_time: funds become fully accrued → recipient withdraws)
 ```
 
 - Cancelling a `Depleted` stream reverts (`StreamNotActive`) — there is
   nothing left to split.
 - Cancelling a not-yet-started stream is a 100 % refund to the sender.
+- While `Paused`, accrual is frozen at the pause-time balance; `withdraw`,
+  `top_up`, and `cancel_stream` remain available.
+- `pause_stream` on any non-Active stream and `resume_stream` on any
+  non-Paused stream revert (`StreamNotActive`).
 - `top_up` on a cancelled/depleted stream reverts.
 
 ### 6.1 Withdraw / cancel race semantics
@@ -444,8 +474,6 @@ griefing) is in [`SCHEDULED_INTENTS.md`](./SCHEDULED_INTENTS.md).
 
 ## 10. Open problems / roadmap hooks
 
-- `pause_stream` (sender-initiated temporary hold) — needs a fourth status and
-  careful `cancel_amounts` treatment; drafted as a good-first-issue.
 - Multi-token batch creation — one tx, N streams; watch the instruction
   budget, likely `try_create_batch` with per-item results.
 - Gas optimization pass on storage reads — `cancel_stream` does one
@@ -669,6 +697,14 @@ a new struct and migrate/cross-read deliberately, rather than editing the
 existing type. `StreamStatus` is name-encoded like `DataKey`, but is nested
 inside stored `Stream` values — same practical freeze.
 
+The pause fields are introduced as schema v3: `get_stream` cross-reads the v2
+shape (`LegacyStream`) and supplies zero paused time, while the governor's
+bounded `migrate_storage` calls rewrite entries in the v3 shape. A per-stream
+format marker distinguishes new entries from legacy entries (which cannot be
+decoded as the expanded struct); both marker and stream entry have their TTL
+extended on writes. The legacy decoder remains available during a partially
+completed migration.
+
 ### 13.3 Event shapes
 
 Events are the off-chain ledger indexers consume; fields decode by position
@@ -680,6 +716,8 @@ Events are the off-chain ledger indexers consume; fields decode by position
 | `Withdrawn` | `stream_id: u64` | `recipient: Address`; `amount: i128`; `withdrawn_total: i128` |
 | `StreamCancelled` | `stream_id: u64` | `cancelled_by: Address`; `recipient_amount: i128`; `sender_amount: i128` |
 | `StreamToppedUp` | `stream_id: u64` | `sender: Address`; `amount: i128`; `new_deposit: i128` |
+| `PauseStream` | `stream_id: u64` | — |
+| `ResumeStream` | `stream_id: u64` | — |
 | `FeeCharged` | `stream_id: u64` | `token: Address`; `payer: Address`; `amount: i128`; `fee_bps: u32` |
 | `FeeWithdrawn` | `token: Address` | `governor: Address`; `recipient: Address`; `amount: i128`; `withdrawn_total: i128` |
 

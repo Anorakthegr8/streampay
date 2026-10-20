@@ -17,8 +17,8 @@ pub const MIN_UPGRADE_DELAY_SECONDS: u64 = 86_400;
 /// Initial schema version (v1).
 pub const INITIAL_SCHEMA_VERSION: u32 = 1;
 
-/// Target schema version after migration (v2).
-pub const TARGET_SCHEMA_VERSION: u32 = 2;
+/// Target schema version after migration (v3).
+pub const TARGET_SCHEMA_VERSION: u32 = 3;
 
 /// Maximum number of streams processed per migration call.
 pub const MAX_MIGRATION_BATCH_SIZE: u32 = 50;
@@ -63,6 +63,8 @@ pub enum StreamStatus {
     Cancelled,
     /// Fully streamed and fully withdrawn. Terminal.
     Depleted,
+    /// Accrual is frozen; withdrawals and top-ups remain available.
+    Paused,
 }
 
 /// Full state of a payment stream.
@@ -82,14 +84,37 @@ pub struct Stream {
     /// If true, the recipient may also cancel and reclaim their accrued balance.
     pub cancelable: bool,
     pub status: StreamStatus,
+    /// Cumulative time spent paused. Also subtracted from the effective end
+    /// time to preserve the original accrual rate.
+    pub paused_total: u64,
+    /// Most recent lifecycle boundary: resume time while active, pause time
+    /// while paused.
+    pub last_resumed_at: u64,
 }
 
 impl Stream {
-    /// Seconds in the stream's full window. Always `>= 1` for a stored stream
-    /// (`create_stream` rejects `end_time <= start_time`).
+    /// Original accrual duration, excluding time the stream has been paused.
     pub fn duration(&self) -> u64 {
-        self.end_time - self.start_time
+        self.end_time - self.start_time - self.paused_total
     }
+}
+
+/// The v2 stored shape, used to read streams created before pause fields were
+/// added. `get_stream` upgrades these lazily; the governor migration persists
+/// the new shape in bounded batches.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct LegacyStream {
+    pub id: u64,
+    pub sender: Address,
+    pub recipient: Address,
+    pub token: Address,
+    pub deposit: i128,
+    pub withdrawn: i128,
+    pub start_time: u64,
+    pub end_time: u64,
+    pub cancelable: bool,
+    pub status: StreamStatus,
 }
 
 /// Parameters for creating a single stream within a batch creation call.
@@ -169,6 +194,8 @@ pub enum DataKey {
     PendingUpgrade,
     /// Highest stream id processed by storage migration (instance storage).
     MigrationCursor,
+    /// Presence marks a `Stream(id)` entry as using the pause-aware v3 shape.
+    StreamVersion(u64),
 }
 
 /// Seconds elapsed of the stream window at the current ledger time.
@@ -229,7 +256,17 @@ pub fn streamed_at(deposit: i128, duration: u64, elapsed: u64) -> Result<i128, S
 ///
 /// See [`streamed_at`] for the rate semantics.
 pub fn streamed_amount(env: &Env, stream: &Stream) -> Result<i128, StreamError> {
-    let elapsed = elapsed_seconds(env, stream.start_time, stream.end_time);
+    let elapsed = if stream.status == StreamStatus::Paused {
+        stream
+            .last_resumed_at
+            .saturating_sub(stream.start_time)
+            .saturating_sub(stream.paused_total)
+            .min(stream.duration())
+    } else {
+        elapsed_seconds(env, stream.start_time, stream.end_time)
+            .saturating_sub(stream.paused_total)
+            .min(stream.duration())
+    };
     streamed_at(stream.deposit, stream.duration(), elapsed)
 }
 
@@ -289,10 +326,30 @@ pub fn reserve_stream_ids(env: &Env, count: u32) -> Result<u64, StreamError> {
 pub fn get_stream(env: &Env, id: u64) -> Result<Stream, StreamError> {
     #[cfg(test)]
     crate::cei_trace::record(&std::format!("read persistent Stream({id})"));
-    env.storage()
-        .persistent()
-        .get(&DataKey::Stream(id))
-        .ok_or_else(|| surface::reject(Branch::StreamNotFound))
+    let key = DataKey::Stream(id);
+    let storage = env.storage().persistent();
+    if storage.has(&DataKey::StreamVersion(id)) {
+        return storage
+            .get(&key)
+            .ok_or_else(|| surface::reject(Branch::StreamNotFound));
+    }
+    if let Some(legacy) = storage.get::<_, LegacyStream>(&key) {
+        return Ok(Stream {
+            id: legacy.id,
+            sender: legacy.sender,
+            recipient: legacy.recipient,
+            token: legacy.token,
+            deposit: legacy.deposit,
+            withdrawn: legacy.withdrawn,
+            start_time: legacy.start_time,
+            end_time: legacy.end_time,
+            cancelable: legacy.cancelable,
+            status: legacy.status,
+            paused_total: 0,
+            last_resumed_at: legacy.start_time,
+        });
+    }
+    Err(surface::reject(Branch::StreamNotFound))
 }
 
 /// Persists a stream and extends its storage TTL.
@@ -301,6 +358,14 @@ pub fn put_stream(env: &Env, stream: &Stream) {
     crate::cei_trace::record(&std::format!("write persistent Stream({})", stream.id));
     let key = DataKey::Stream(stream.id);
     env.storage().persistent().set(&key, stream);
+    env.storage()
+        .persistent()
+        .set(&DataKey::StreamVersion(stream.id), &3u32);
+    env.storage().persistent().extend_ttl(
+        &DataKey::StreamVersion(stream.id),
+        TTL_THRESHOLD_LEDGERS,
+        TTL_EXTEND_LEDGERS,
+    );
     env.storage()
         .persistent()
         .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_LEDGERS);
@@ -446,4 +511,45 @@ pub fn set_migration_cursor(env: &Env, cursor: u64) {
     env.storage()
         .instance()
         .extend_ttl(TTL_THRESHOLD_LEDGERS, TTL_EXTEND_LEDGERS);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn reads_legacy_streams_and_upgrades_them_on_write() {
+        let env = Env::default();
+        let governor = Address::generate(&env);
+        let contract_id = env.register(crate::StreamingPayments, (governor,));
+        let id = 1;
+        let sender = Address::generate(&env);
+        let recipient = Address::generate(&env);
+        let token = Address::generate(&env);
+        let legacy = LegacyStream {
+            id,
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            token: token.clone(),
+            deposit: 100,
+            withdrawn: 0,
+            start_time: 10,
+            end_time: 20,
+            cancelable: false,
+            status: StreamStatus::Active,
+        };
+        env.as_contract(&contract_id, || {
+            env.storage()
+                .persistent()
+                .set(&DataKey::Stream(id), &legacy);
+
+            let upgraded = get_stream(&env, id).unwrap();
+            assert_eq!(upgraded.paused_total, 0);
+            assert_eq!(upgraded.last_resumed_at, legacy.start_time);
+            assert_eq!(upgraded.deposit, legacy.deposit);
+            put_stream(&env, &upgraded);
+            assert_eq!(get_stream(&env, id).unwrap(), upgraded);
+        });
+    }
 }
