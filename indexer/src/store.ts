@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DecodedEvent, Stream } from "./types.js";
+import { EVENT_KEYS } from "./generated/events.js";
 import { WebhookStore } from "./webhooks/store.js";
 import { OutboxStore, newOutboxEventFromDecoded } from "./outbox/store.js";
 import { globalIndexerTracer, traceCorrelationRegistry } from "./telemetry.js";
@@ -160,7 +161,9 @@ export class StreamStore {
       };
 
       switch (event.name) {
-        case "stream_created":
+        // Registry-known event keys (schemas/events/registry.json), via the
+        // generated table so a renamed key fails typecheck here.
+        case EVENT_KEYS.StreamCreated:
           Object.assign(patch, {
             sender: get("sender"),
             recipient: get("recipient"),
@@ -173,13 +176,13 @@ export class StreamStore {
             withdrawn: "0",
           });
           break;
-        case "withdrawn":
+        case EVENT_KEYS.Withdrawn:
           patch.withdrawn = get("withdrawn_total") ?? (existing?.withdrawn as string | undefined) ?? "0";
           break;
-        case "stream_topped_up":
+        case EVENT_KEYS.StreamToppedUp:
           patch.deposit = get("new_deposit") ?? (existing?.deposit as string | undefined) ?? null;
           break;
-        case "stream_cancelled": {
+        case EVENT_KEYS.StreamCancelled: {
           patch.status = "cancelled";
           patch.cancelled_by = get("cancelled_by") ?? (existing?.cancelled_by as string | undefined) ?? null;
           patch.recipient_amount = get("recipient_amount") ?? (existing?.recipient_amount as string | undefined) ?? null;
