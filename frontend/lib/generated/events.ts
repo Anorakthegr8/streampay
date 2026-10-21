@@ -6,6 +6,21 @@
 /* Target: shared event contract between indexer and frontend (registry v1). */
 /* --------------------------------------------------------------------------*/
 
+/** Contract enum `GovernanceAction`, wire-encoded as `[variant symbol, payload…]` where the
+ * variant discriminant selects the payload shape (fingerprint `sha256:0f26e7841b352ee7e3dac8702cc01e364b890d96dfc8f6567e9775d94fdb4819`). */
+export type GovernanceAction =
+  | { variant: "SetFeeBps"; payload: [number] }
+  | { variant: "SetStreamPolicy"; payload: [string | null, StreamPolicy] }
+  | { variant: "SetFrozen"; payload: [boolean] }
+  | { variant: "WithdrawTreasury"; payload: [string, string, bigint] }
+  | { variant: "NominateGovernor"; payload: [string] }
+  | { variant: "ProposeUpgrade"; payload: [Uint8Array, bigint] }
+  | { variant: "ExecuteUpgrade"; payload: [] }
+  | { variant: "MigrateStorage"; payload: [bigint, number] }
+  | { variant: "SetOracleConfig"; payload: [string[], number, bigint] }
+  | { variant: "SetSigners"; payload: [string[]] }
+  | { variant: "SetVetoWindow"; payload: [bigint] };
+
 /** Contract enum `OwnershipRole`, wire-encoded as its variant symbol (fingerprint `sha256:9a35d395186a0ccdcb9b28a4d1f1d00302ab9cc9b3cff86483d8663be74eee57`). */
 export type OwnershipRole = "Recipient" | "Sender";
 
@@ -58,6 +73,47 @@ export interface FeeWithdrawnEvent {
   recipient: string;
   amount: bigint;
   withdrawn_total: bigint;
+}
+
+/** Emitted when a matured, multiply-signed proposal is applied. `executed_by` is whoever submitted the transaction — execution is permissionless — while `signers` names the keys that actually authorized it. */
+/** Event key `governance_action_executed` — fingerprint `sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02`. */
+export interface GovernanceActionExecutedEvent {
+  proposal_id: bigint;
+  action: GovernanceAction;
+  signers: string[];
+  executed_by: string;
+}
+
+/** Emitted when a signer proposes an admin action. `executable_at` is the end of the veto window: from that timestamp the proposal is executable by anyone and is never voided by time. */
+/** Event key `governance_action_proposed` — fingerprint `sha256:1930191a03f61d83e3fe628ce152834f7b639b71af8e817838fc0c57794ba850`. */
+export interface GovernanceActionProposedEvent {
+  proposal_id: bigint;
+  proposed_by: string;
+  executable_at: bigint;
+  action: GovernanceAction;
+}
+
+/** Emitted for each distinct signature. A second signature from an address that already signed is refused before this event can fire, so `signature_count` here is always a count of distinct keys. */
+/** Event key `governance_action_signed` — fingerprint `sha256:05a46601921e524677a6b100a6b1d038f189fe1ab4e796b2ecf3cef374d94b4d`. */
+export interface GovernanceActionSignedEvent {
+  proposal_id: bigint;
+  signer: string;
+  signature_count: number;
+}
+
+/** Emitted when a signer vetoes a proposal inside its veto window. */
+/** Event key `governance_action_vetoed` — fingerprint `sha256:fe6590a48703dc9d3f3f61e0e05c54467fc771245b0c63f546451909ad4230a7`. */
+export interface GovernanceActionVetoedEvent {
+  proposal_id: bigint;
+  vetoed_by: string;
+}
+
+/** Emitted when the signer set is established or rotated, and when the veto window changes. The set is emitted in full because "which keys govern this contract" is only auditable from the transcript, not from a delta. */
+/** Event key `governance_signers_set` — fingerprint `sha256:c80b3f90f2621ff7578044e47b82978b1f997300723831e782bc137d0ac33a16`. */
+export interface GovernanceSignersSetEvent {
+  set_by: string;
+  signers: string[];
+  veto_window: bigint;
 }
 
 /** Emitted when a sponsor rotates its authorized operator (relayer) key. The previous operator key stops validating relay signatures immediately. */
@@ -311,6 +367,11 @@ export const EVENT_KEYS = {
   ContractUpgraded: "contract_upgraded",
   FeeCharged: "fee_charged",
   FeeWithdrawn: "fee_withdrawn",
+  GovernanceActionExecuted: "governance_action_executed",
+  GovernanceActionProposed: "governance_action_proposed",
+  GovernanceActionSigned: "governance_action_signed",
+  GovernanceActionVetoed: "governance_action_vetoed",
+  GovernanceSignersSet: "governance_signers_set",
   OperatorKeyRotated: "operator_key_rotated",
   OracleConfigUpdated: "oracle_config_updated",
   OracleStaleFallback: "oracle_stale_fallback",
@@ -345,7 +406,7 @@ export const EVENT_KEYS = {
 export type ContractEventName = (typeof EVENT_KEYS)[keyof typeof EVENT_KEYS];
 
 /** Every event this registry knows about, even if a consumer ignores it. */
-export const ALL_CONTRACT_EVENT_NAMES: readonly ContractEventName[] = ["beneficiary_enrolled", "contract_frozen_state_changed", "contract_upgraded", "fee_charged", "fee_withdrawn", "operator_key_rotated", "oracle_config_updated", "oracle_stale_fallback", "oracle_time_reported", "ownership_accepted", "ownership_proposed", "policy_asset_executed", "policy_asset_queued", "policy_handoff_accepted", "policy_handoff_cancelled", "policy_handoff_proposed", "policy_initialized", "scheduled_intent_cancelled", "scheduled_intent_expired", "scheduled_stream_executed", "sponsor_active_set", "sponsor_claim", "sponsor_registered", "storage_migrated", "stream_cancelled", "stream_created", "stream_policy_set", "stream_scheduled", "stream_topped_up", "streams_created", "upgrade_cancelled", "upgrade_proposed", "withdrawn"] as const;
+export const ALL_CONTRACT_EVENT_NAMES: readonly ContractEventName[] = ["beneficiary_enrolled", "contract_frozen_state_changed", "contract_upgraded", "fee_charged", "fee_withdrawn", "governance_action_executed", "governance_action_proposed", "governance_action_signed", "governance_action_vetoed", "governance_signers_set", "operator_key_rotated", "oracle_config_updated", "oracle_stale_fallback", "oracle_time_reported", "ownership_accepted", "ownership_proposed", "policy_asset_executed", "policy_asset_queued", "policy_handoff_accepted", "policy_handoff_cancelled", "policy_handoff_proposed", "policy_initialized", "scheduled_intent_cancelled", "scheduled_intent_expired", "scheduled_stream_executed", "sponsor_active_set", "sponsor_claim", "sponsor_registered", "storage_migrated", "stream_cancelled", "stream_created", "stream_policy_set", "stream_scheduled", "stream_topped_up", "streams_created", "upgrade_cancelled", "upgrade_proposed", "withdrawn"] as const;
 
 /** Narrow an arbitrary RPC event name to a registered contract event. */
 export function isContractEventName(name: string): name is ContractEventName {
@@ -359,6 +420,11 @@ export const EVENT_STRUCT_BY_KEY: Record<ContractEventName, string> = {
   "contract_upgraded": "ContractUpgraded",
   "fee_charged": "FeeCharged",
   "fee_withdrawn": "FeeWithdrawn",
+  "governance_action_executed": "GovernanceActionExecuted",
+  "governance_action_proposed": "GovernanceActionProposed",
+  "governance_action_signed": "GovernanceActionSigned",
+  "governance_action_vetoed": "GovernanceActionVetoed",
+  "governance_signers_set": "GovernanceSignersSet",
   "operator_key_rotated": "OperatorKeyRotated",
   "oracle_config_updated": "OracleConfigUpdated",
   "oracle_stale_fallback": "OracleStaleFallback",
@@ -413,6 +479,11 @@ export const EVENT_SHAPES: Record<ContractEventName, EventShape> = {
   "contract_upgraded": { struct: "ContractUpgraded", eventKey: "contract_upgraded", fingerprint: "sha256:0228c88243ed185f32359dd32f813d0c1df5ef393fbe5416fc120720020dc2fe", topics: [{"name":"new_wasm_hash","type":"BytesN<32>"}], data: [{"name":"executed_by","type":"Address"}] },
   "fee_charged": { struct: "FeeCharged", eventKey: "fee_charged", fingerprint: "sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"token","type":"Address"},{"name":"payer","type":"Address"},{"name":"amount","type":"i128"},{"name":"fee_bps","type":"u32"}] },
   "fee_withdrawn": { struct: "FeeWithdrawn", eventKey: "fee_withdrawn", fingerprint: "sha256:9ff2fcadb55242503df39977b4db5c00d64728bc970fb0b58db39422bb5a516d", topics: [{"name":"token","type":"Address"}], data: [{"name":"governor","type":"Address"},{"name":"recipient","type":"Address"},{"name":"amount","type":"i128"},{"name":"withdrawn_total","type":"i128"}] },
+  "governance_action_executed": { struct: "GovernanceActionExecuted", eventKey: "governance_action_executed", fingerprint: "sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02", topics: [{"name":"proposal_id","type":"u64"}], data: [{"name":"action","type":"GovernanceAction"},{"name":"signers","type":"Vec<Address>"},{"name":"executed_by","type":"Address"}] },
+  "governance_action_proposed": { struct: "GovernanceActionProposed", eventKey: "governance_action_proposed", fingerprint: "sha256:1930191a03f61d83e3fe628ce152834f7b639b71af8e817838fc0c57794ba850", topics: [{"name":"proposal_id","type":"u64"}], data: [{"name":"proposed_by","type":"Address"},{"name":"executable_at","type":"u64"},{"name":"action","type":"GovernanceAction"}] },
+  "governance_action_signed": { struct: "GovernanceActionSigned", eventKey: "governance_action_signed", fingerprint: "sha256:05a46601921e524677a6b100a6b1d038f189fe1ab4e796b2ecf3cef374d94b4d", topics: [{"name":"proposal_id","type":"u64"}], data: [{"name":"signer","type":"Address"},{"name":"signature_count","type":"u32"}] },
+  "governance_action_vetoed": { struct: "GovernanceActionVetoed", eventKey: "governance_action_vetoed", fingerprint: "sha256:fe6590a48703dc9d3f3f61e0e05c54467fc771245b0c63f546451909ad4230a7", topics: [{"name":"proposal_id","type":"u64"}], data: [{"name":"vetoed_by","type":"Address"}] },
+  "governance_signers_set": { struct: "GovernanceSignersSet", eventKey: "governance_signers_set", fingerprint: "sha256:c80b3f90f2621ff7578044e47b82978b1f997300723831e782bc137d0ac33a16", topics: [{"name":"set_by","type":"Address"}], data: [{"name":"signers","type":"Vec<Address>"},{"name":"veto_window","type":"u64"}] },
   "operator_key_rotated": { struct: "OperatorKeyRotated", eventKey: "operator_key_rotated", fingerprint: "sha256:e173c61697b4045d0fb1e94358fe8b4675bfca312369ac887f2ff23f21fb413b", topics: [{"name":"sponsor","type":"Address"},{"name":"kind","type":"Symbol"}], data: [{"name":"new_operator_key","type":"BytesN<32>"}] },
   "oracle_config_updated": { struct: "OracleConfigUpdated", eventKey: "oracle_config_updated", fingerprint: "sha256:91f894797f41c1566560dd5c04581611fb8d29bd0ac48bfc022d0ab4de0e6099", topics: [], data: [{"name":"threshold","type":"u32"},{"name":"max_stale_seconds","type":"u64"}] },
   "oracle_stale_fallback": { struct: "OracleStaleFallback", eventKey: "oracle_stale_fallback", fingerprint: "sha256:d1baed22ab39c524cd1297b2a5f14d39eeec300ef27ce95583562f1e2e26dbec", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"ledger_time","type":"u64"}] },
@@ -450,6 +521,11 @@ export const EVENT_FINGERPRINTS: Record<string, string> = {
   "ContractUpgraded": "sha256:0228c88243ed185f32359dd32f813d0c1df5ef393fbe5416fc120720020dc2fe",
   "FeeCharged": "sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da",
   "FeeWithdrawn": "sha256:9ff2fcadb55242503df39977b4db5c00d64728bc970fb0b58db39422bb5a516d",
+  "GovernanceActionExecuted": "sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02",
+  "GovernanceActionProposed": "sha256:1930191a03f61d83e3fe628ce152834f7b639b71af8e817838fc0c57794ba850",
+  "GovernanceActionSigned": "sha256:05a46601921e524677a6b100a6b1d038f189fe1ab4e796b2ecf3cef374d94b4d",
+  "GovernanceActionVetoed": "sha256:fe6590a48703dc9d3f3f61e0e05c54467fc771245b0c63f546451909ad4230a7",
+  "GovernanceSignersSet": "sha256:c80b3f90f2621ff7578044e47b82978b1f997300723831e782bc137d0ac33a16",
   "OperatorKeyRotated": "sha256:e173c61697b4045d0fb1e94358fe8b4675bfca312369ac887f2ff23f21fb413b",
   "OracleConfigUpdated": "sha256:91f894797f41c1566560dd5c04581611fb8d29bd0ac48bfc022d0ab4de0e6099",
   "OracleStaleFallback": "sha256:d1baed22ab39c524cd1297b2a5f14d39eeec300ef27ce95583562f1e2e26dbec",

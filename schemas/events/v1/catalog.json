@@ -32,6 +32,36 @@
       "struct": "FeeWithdrawn"
     },
     {
+      "event_key": "governance_action_executed",
+      "fingerprint": "sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02",
+      "schema": "events/governance_action_executed.json",
+      "struct": "GovernanceActionExecuted"
+    },
+    {
+      "event_key": "governance_action_proposed",
+      "fingerprint": "sha256:1930191a03f61d83e3fe628ce152834f7b639b71af8e817838fc0c57794ba850",
+      "schema": "events/governance_action_proposed.json",
+      "struct": "GovernanceActionProposed"
+    },
+    {
+      "event_key": "governance_action_signed",
+      "fingerprint": "sha256:05a46601921e524677a6b100a6b1d038f189fe1ab4e796b2ecf3cef374d94b4d",
+      "schema": "events/governance_action_signed.json",
+      "struct": "GovernanceActionSigned"
+    },
+    {
+      "event_key": "governance_action_vetoed",
+      "fingerprint": "sha256:fe6590a48703dc9d3f3f61e0e05c54467fc771245b0c63f546451909ad4230a7",
+      "schema": "events/governance_action_vetoed.json",
+      "struct": "GovernanceActionVetoed"
+    },
+    {
+      "event_key": "governance_signers_set",
+      "fingerprint": "sha256:c80b3f90f2621ff7578044e47b82978b1f997300723831e782bc137d0ac33a16",
+      "schema": "events/governance_signers_set.json",
+      "struct": "GovernanceSignersSet"
+    },
+    {
       "event_key": "operator_key_rotated",
       "fingerprint": "sha256:e173c61697b4045d0fb1e94358fe8b4675bfca312369ac887f2ff23f21fb413b",
       "schema": "events/operator_key_rotated.json",

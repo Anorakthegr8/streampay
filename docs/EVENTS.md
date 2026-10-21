@@ -11,6 +11,11 @@ Every event the contract emits, with its on-chain topic layout and decoded data 
 | `contract_upgraded` | `ContractUpgraded` | `new_wasm_hash: BytesN<32>` | `executed_by: Address` | `sha256:0228c88243e…` |
 | `fee_charged` | `FeeCharged` | `stream_id: u64` | `token: Address`, `payer: Address`, `amount: i128`, `fee_bps: u32` | `sha256:420b24e1ebc…` |
 | `fee_withdrawn` | `FeeWithdrawn` | `token: Address` | `governor: Address`, `recipient: Address`, `amount: i128`, `withdrawn_total: i128` | `sha256:9ff2fcadb55…` |
+| `governance_action_executed` | `GovernanceActionExecuted` | `proposal_id: u64` | `action: GovernanceAction`, `signers: Vec<Address>`, `executed_by: Address` | `sha256:de687ceefc1…` |
+| `governance_action_proposed` | `GovernanceActionProposed` | `proposal_id: u64` | `proposed_by: Address`, `executable_at: u64`, `action: GovernanceAction` | `sha256:1930191a03f…` |
+| `governance_action_signed` | `GovernanceActionSigned` | `proposal_id: u64` | `signer: Address`, `signature_count: u32` | `sha256:05a46601921…` |
+| `governance_action_vetoed` | `GovernanceActionVetoed` | `proposal_id: u64` | `vetoed_by: Address` | `sha256:fe6590a4870…` |
+| `governance_signers_set` | `GovernanceSignersSet` | `set_by: Address` | `signers: Vec<Address>`, `veto_window: u64` | `sha256:c80b3f90f26…` |
 | `operator_key_rotated` | `OperatorKeyRotated` | `sponsor: Address`, `kind: Symbol` | `new_operator_key: BytesN<32>` | `sha256:e173c61697b…` |
 | `oracle_config_updated` | `OracleConfigUpdated` | — | `threshold: u32`, `max_stale_seconds: u64` | `sha256:91f894797f4…` |
 | `oracle_stale_fallback` | `OracleStaleFallback` | `stream_id: u64` | `ledger_time: u64` | `sha256:d1baed22ab3…` |
@@ -41,6 +46,7 @@ Every event the contract emits, with its on-chain topic layout and decoded data 
 | `withdrawn` | `Withdrawn` | `stream_id: u64` | `recipient: Address`, `amount: i128`, `withdrawn_total: i128` | `sha256:f236ec39ef8…` |
 
 ## Referenced contract types
+- `GovernanceAction` (payload_enum): one of `SetFeeBps(u32)`, `SetStreamPolicy(Option<Address>, StreamPolicy)`, `SetFrozen(bool)`, `WithdrawTreasury(Address, Address, i128)`, `NominateGovernor(Address)`, `ProposeUpgrade(BytesN<32>, u64)`, `ExecuteUpgrade`, `MigrateStorage(u64, u32)`, `SetOracleConfig(Vec<Address>, u32, u64)`, `SetSigners(Vec<Address>)`, `SetVetoWindow(u64)` (fingerprint `sha256:0f26e7841b3…`)
 - `OwnershipRole` (enum): one of `Recipient`, `Sender` (fingerprint `sha256:9a35d395186…`)
 - `StreamPolicy` (struct): `min_rate: i128`, `max_rate: i128`, `min_duration: u64`, `max_duration: u64`, `min_deposit: i128` (fingerprint `sha256:c3619acbaa1…`)
 
