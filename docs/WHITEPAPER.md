@@ -424,7 +424,7 @@ It also checks that every `[Cn]` cited in the text has a row, and that every row
 | C42 | Fee = floor(deposit * bps / 10,000), checked; zero at 0 bps or non-positive deposit | `contracts/streaming-payments/src/treasury.rs:110-118` | `Ok((product / (BPS_DENOMINATOR as u128)) as i128)` |
 | C43 | Setting the fee rejects rates above the cap | `contracts/streaming-payments/src/lib.rs:1640` | `if new_fee_bps > MAX_FEE_BPS {` |
 | C44 | Charged fees accumulate into the token's charged_total | `contracts/streaming-payments/src/treasury.rs:201-206` | `treasury.charged_total = treasury` |
-| C45 | Single creation computes the fee | `contracts/streaming-payments/src/lib.rs:332` | `let fee = treasury::fee_amount(deposit_amount, fee_bps)?;` |
+| C45 | Single creation computes the fee | `contracts/streaming-payments/src/lib.rs:332` | `let fee = treasury::fee_amount(deposit_amount, fee_bps)?;`
 | C46 | TTL threshold 200,000 ledgers, extension 500,000 ledgers | `contracts/streaming-payments/src/stream.rs:62-63` | `TTL_EXTEND_LEDGERS: u32 = 500_000;` |
 | C47 | Every stream write extends the stream entry's TTL | `contracts/streaming-payments/src/stream.rs:466` | `.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_LEDGERS);` |
 | C48 | Treasury writes extend the treasury entry's TTL | `contracts/streaming-payments/src/treasury.rs:180-188` | `.extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_LEDGERS);` |
@@ -434,5 +434,5 @@ It also checks that every `[Cn]` cited in the text has a row, and that every row
 | C52 | Batch creation runs `validate_stream_creation` for every input | `contracts/streaming-payments/src/lib.rs:504` | `Self::validate_stream_creation(` |
 | C53 | Cancel accepts Active and Paused streams | `contracts/streaming-payments/src/lib.rs:887` | `if s.status != StreamStatus::Active && s.status != StreamStatus::Paused {` |
 | C54 | Top-up accepts Active and Paused streams | `contracts/streaming-payments/src/lib.rs:1030` | `if s.status != StreamStatus::Active && s.status != StreamStatus::Paused {` |
-| C55 | Batch creation computes the fee per input | `contracts/streaming-payments/src/lib.rs:516` | `let fee = treasury::fee_amount(input.deposit_amount, fee_bps)?;` |
+| C55 | Batch creation computes the fee per input | `contracts/streaming-payments/src/lib.rs:516` | `let fee = treasury::fee_amount(input.deposit_amount, fee_bps)?;`
 <!-- claims:end -->
