@@ -238,22 +238,49 @@ fn snake_case(name: &str) -> String {
     out
 }
 
+/// Every doc string on an item, in source order.
+///
+/// Two spellings have to be read. `///` compiles to a plain `#[doc = "…"]`, and
+/// main's wasm-size pass rewrote event docs into
+/// `#[cfg_attr(not(target_family = "wasm"), doc = "…")]` so the strings stay out
+/// of the on-chain artifact. Skipping the second form would silently publish
+/// `description: ""` for every event, so the generator reads both: a doc behind
+/// a cfg condition still documents the event for every registry consumer.
+fn doc_strings(attrs: &[syn::Attribute]) -> Vec<String> {
+    let mut out = Vec::new();
+    for attr in attrs {
+        let mut push = |meta: &syn::Meta| {
+            if let syn::Meta::NameValue(nv) = meta {
+                if nv.path.is_ident("doc") {
+                    if let syn::Expr::Lit(syn::ExprLit {
+                        lit: syn::Lit::Str(s),
+                        ..
+                    }) = &nv.value
+                    {
+                        out.push(s.value());
+                    }
+                }
+            }
+        };
+        match &attr.meta {
+            syn::Meta::List(list) if list.path.is_ident("cfg_attr") => {
+                let inner = list
+                    .parse_args_with(
+                        syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                    )
+                    .unwrap_or_else(|e| panic!("cannot read `cfg_attr({})`: {e}", list.tokens));
+                for meta in inner {
+                    push(&meta);
+                }
+            }
+            meta => push(meta),
+        }
+    }
+    out
+}
+
 fn doc_text(item: &ItemStruct) -> String {
-    let lines: Vec<String> = item
-        .attrs
-        .iter()
-        .filter(|a| a.path().is_ident("doc"))
-        .filter_map(|a| match &a.meta {
-            syn::Meta::NameValue(nv) => match &nv.value {
-                syn::Expr::Lit(syn::ExprLit {
-                    lit: syn::Lit::Str(s),
-                    ..
-                }) => Some(s.value()),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect();
+    let lines = doc_strings(&item.attrs);
     let text = lines
         .iter()
         .map(|l| l.trim())
