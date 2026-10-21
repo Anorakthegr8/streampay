@@ -80,12 +80,56 @@ struct FieldSpec {
 
 /// A contract type referenced by an event field. Structs contribute their field
 /// set; unit-variant enums (wire-encoded as symbols) contribute their variant
-/// names. Either way the expansion is folded into every fingerprint that
+/// names; enums with payloads contribute each variant's positional payload
+/// types. Either way the expansion is folded into every fingerprint that
 /// references it, so changing the definition changes the event.
 #[derive(Clone, Debug)]
 enum DefKind {
     Struct(Vec<FieldSpec>),
     Enum(Vec<String>),
+    PayloadEnum(Vec<VariantSpec>),
+}
+
+/// One variant of a payload-carrying `#[contracttype]` enum. Soroban encodes
+/// such an enum as `[Symbol(variant), payload…]` and selects the variant by
+/// *discriminant*, so both the payload types and the declaration order are
+/// wire-visible — unlike the unit-variant case above, these variants stay in
+/// declaration order and are never sorted.
+///
+/// `fields` carries the payload in source order; `FieldSpec::name` is the
+/// variant's field name for a struct-like variant, or its positional index as
+/// text for a tuple variant.
+#[derive(Clone, Debug)]
+struct VariantSpec {
+    name: String,
+    fields: Vec<FieldSpec>,
+}
+
+impl VariantSpec {
+    /// True when every payload field is positional (a tuple variant), as
+    /// opposed to a struct-like variant with named fields.
+    fn is_positional(&self) -> bool {
+        self.fields.iter().all(|f| f.name.parse::<usize>().is_ok())
+    }
+
+    fn canonical(&self, defs: &Definitions) -> String {
+        let parts: Vec<String> = self
+            .fields
+            .iter()
+            .map(|f| {
+                if self.is_positional() {
+                    defs.canonical_type(&f.ty)
+                } else {
+                    format!("{}:{}", f.name, defs.canonical_type(&f.ty))
+                }
+            })
+            .collect();
+        if self.is_positional() {
+            format!("{}({})", self.name, parts.join("+"))
+        } else {
+            format!("{}{{{}}}", self.name, parts.join(","))
+        }
+    }
 }
 
 impl DefKind {
@@ -100,6 +144,14 @@ impl DefKind {
                 format!("{name}{{{}}}", parts.join(","))
             }
             DefKind::Enum(variants) => format!("{name}{{enum:{}}}", variants.join(",")),
+            DefKind::PayloadEnum(variants) => format!(
+                "{name}{{payload_enum:{}}}",
+                variants
+                    .iter()
+                    .map(|v| v.canonical(defs))
+                    .collect::<Vec<String>>()
+                    .join(",")
+            ),
         }
     }
 }
@@ -230,6 +282,24 @@ fn field_specs(item: &ItemStruct) -> Vec<FieldSpec> {
 
 fn is_topic_field(f: &syn::Field) -> bool {
     f.attrs.iter().any(|a| a.path().is_ident("topic"))
+}
+
+/// The payload of one enum variant, in source order. Tuple variants have no
+/// idents, so their fields are labelled by position; struct-like variants keep
+/// their names.
+fn variant_field_specs(fields: &syn::Fields) -> Vec<FieldSpec> {
+    fields
+        .iter()
+        .enumerate()
+        .map(|(i, f)| FieldSpec {
+            name: f
+                .ident
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| i.to_string()),
+            ty: normalize_type(&compact_type(&f.ty)),
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -432,20 +502,28 @@ fn collect_items(file: &File, defs: &mut BTreeMap<String, DefKind>, events: &mut
                 }
             }
             Item::Enum(e) => {
-                // `#[contracttype]` enums whose variants all carry no data are
-                // wire-encoded as their variant symbol, so the variant name set
-                // is the whole public shape. Enums with payload variants have no
-                // registry mapping yet and will fail generation if referenced.
-                let variants: Vec<String> = e
+                // `#[contracttype]` enums come in two wire shapes. If every
+                // variant is data-free the host encodes the value as its
+                // variant symbol alone, so the sorted name set is the whole
+                // public shape. Once a variant carries a payload the encoding
+                // becomes `[symbol, payload…]` selected by discriminant, so the
+                // registry keeps declaration order and each variant's types.
+                let variants: Vec<VariantSpec> = e
                     .variants
                     .iter()
-                    .filter(|v| v.fields.is_empty())
-                    .map(|v| v.ident.to_string())
+                    .map(|v| VariantSpec {
+                        name: v.ident.to_string(),
+                        fields: variant_field_specs(&v.fields),
+                    })
                     .collect();
-                if variants.len() == e.variants.len() && !variants.is_empty() {
-                    let mut sorted = variants;
+                if variants.is_empty() {
+                    // A data-less enum has no public shape to pin.
+                } else if variants.iter().all(|v| v.fields.is_empty()) {
+                    let mut sorted: Vec<String> = variants.iter().map(|v| v.name.clone()).collect();
                     sorted.sort();
                     defs.insert(e.ident.to_string(), DefKind::Enum(sorted));
+                } else {
+                    defs.insert(e.ident.to_string(), DefKind::PayloadEnum(variants));
                 }
             }
             Item::Mod(m) => {
@@ -554,6 +632,32 @@ fn json_schema_for(
                             "description": format!("Contract enum `{name}` referenced by event fields, wire-encoded as its variant symbol."),
                             "enum": variants,
                         }),
+                        DefKind::PayloadEnum(variants) => json!({
+                            "type": "array",
+                            "title": name,
+                            "description": format!(
+                                "Contract enum `{name}` referenced by event fields. Wire form is \
+                                 [variant symbol, payload…]; the payload shape depends on the variant."
+                            ),
+                            "oneOf": variants
+                                .iter()
+                                .map(|v| {
+                                    let mut positional =
+                                        vec![json!({"const": v.name.clone()})];
+                                    positional.extend(
+                                        v.fields
+                                            .iter()
+                                            .map(|f| json_schema_for(&f.ty, defs, emitted))
+                                            .collect::<Vec<_>>(),
+                                    );
+                                    json!({
+                                        "prefixItems": positional,
+                                        "minItems": v.fields.len() + 1,
+                                        "maxItems": v.fields.len() + 1,
+                                    })
+                                })
+                                .collect::<Vec<_>>(),
+                        }),
                     };
                     emitted.insert(name.clone(), schema);
                 }
@@ -625,6 +729,28 @@ fn registry_json(events: &[EventSpec], defs: &Definitions) -> serde_json::Value 
                 entry.insert(
                     "variants".into(),
                     Value::Array(variants.iter().map(|v| Value::String(v.clone())).collect()),
+                );
+            }
+            DefKind::PayloadEnum(variants) => {
+                entry.insert("kind".to_string(), Value::String("payload_enum".into()));
+                entry.insert(
+                    "variants".into(),
+                    Value::Array(
+                        variants
+                            .iter()
+                            .map(|v| {
+                                json!({
+                                    "name": v.name,
+                                    "positional": v.is_positional(),
+                                    "fields": v
+                                        .fields
+                                        .iter()
+                                        .map(|f| json!({"name": f.name, "type": f.ty}))
+                                        .collect::<Vec<_>>(),
+                                })
+                            })
+                            .collect::<Vec<_>>(),
+                    ),
                 );
             }
         }

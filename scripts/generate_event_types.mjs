@@ -79,11 +79,30 @@ function generateTs(registry) {
   const lines = [];
   lines.push(header("shared event contract between indexer and frontend", registry.registry_version));
 
-  // Referenced contract types: structs by field, enums by variant symbol.
+  // Referenced contract types: structs by field, unit enums by variant symbol,
+  // payload enums as a discriminated union of `[variant, payload…]`.
   for (const [name, def] of Object.entries(definitions)) {
     if (def.kind === "enum") {
       lines.push(`/** Contract enum \`${name}\`, wire-encoded as its variant symbol (fingerprint \`${def.fingerprint}\`). */`);
       lines.push(`export type ${name} = ${def.variants.map((v) => JSON.stringify(v)).join(" | ")};`, "");
+      continue;
+    }
+    if (def.kind === "payload_enum") {
+      lines.push(
+        `/** Contract enum \`${name}\`, wire-encoded as \`[variant symbol, payload…]\` where the`,
+        ` * variant discriminant selects the payload shape (fingerprint \`${def.fingerprint}\`). */`
+      );
+      lines.push(`export type ${name} =`);
+      const members = def.variants.map((v) => {
+        const payload =
+          v.fields.length === 0
+            ? "[]"
+            : v.positional
+              ? `[${v.fields.map((f) => tsType(f.type, definitions)).join(", ")}]`
+              : `{ ${v.fields.map((f) => `${f.name}: ${tsType(f.type, definitions)}`).join("; ")} }`;
+        return `  | { variant: ${JSON.stringify(v.name)}; payload: ${payload} }`;
+      });
+      lines.push(`${members.join("\n")};`, "");
       continue;
     }
     lines.push(`/** Contract struct \`${name}\` (referenced by event fields; fingerprint \`${def.fingerprint}\`). */`);
@@ -203,7 +222,15 @@ function generateDocs(registry) {
       const shape =
         def.kind === "enum"
           ? `one of ${def.variants.map((v) => `\`${v}\``).join(", ")}`
-          : def.fields.map((f) => `\`${f.name}: ${f.type}\``).join(", ");
+          : def.kind === "payload_enum"
+            ? `one of ${def.variants
+                .map((v) =>
+                  v.fields.length === 0
+                    ? `\`${v.name}\``
+                    : `\`${v.name}(${v.fields.map((f) => f.type).join(", ")})\``
+                )
+                .join(", ")}`
+            : def.fields.map((f) => `\`${f.name}: ${f.type}\``).join(", ");
       lines.push(`- \`${name}\` (${def.kind ?? "struct"}): ${shape} (fingerprint \`${def.fingerprint.slice(0, 18)}…\`)`);
     }
   }
