@@ -226,6 +226,10 @@ pub enum StreamError {
     /// The action requires an executed governance proposal now that the signer
     /// set is bootstrapped; the direct entry point is closed.
     GovernanceTimelockRequired = 79,
+    /// The caller is not the sender authorized to pause the stream.
+    PauseStreamNotAuthorized = 80,
+    /// The caller is not the sender authorized to resume the stream.
+    ResumeStreamNotAuthorized = 81,
 }
 
 impl StreamError {
@@ -312,6 +316,8 @@ impl StreamError {
         StreamError::GovernanceDuplicateSignature,
         StreamError::GovernanceSignaturesInsufficient,
         StreamError::GovernanceTimelockRequired,
+        StreamError::PauseStreamNotAuthorized,
+        StreamError::ResumeStreamNotAuthorized,
     ];
 
     /// The stable numeric value carried across the contract boundary

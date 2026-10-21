@@ -10806,6 +10806,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -10930,6 +10938,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -11062,6 +11078,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -11186,6 +11210,14 @@
                     },
                     "val": {
                       "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -11318,6 +11350,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -11442,6 +11482,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -11574,6 +11622,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -11698,6 +11754,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -11830,6 +11894,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -11954,6 +12026,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -12086,6 +12166,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -12210,6 +12298,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -12342,6 +12438,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -12466,6 +12570,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -12598,6 +12710,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -12722,6 +12842,14 @@
                     },
                     "val": {
                       "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -12854,6 +12982,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -12978,6 +13114,14 @@
                     },
                     "val": {
                       "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -13110,6 +13254,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -13234,6 +13386,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -13366,6 +13526,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -13490,6 +13658,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -13622,6 +13798,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -13746,6 +13930,14 @@
                     },
                     "val": {
                       "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -13878,6 +14070,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -14002,6 +14202,14 @@
                     },
                     "val": {
                       "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -14134,6 +14342,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -14258,6 +14474,14 @@
                     },
                     "val": {
                       "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -14390,6 +14614,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -14518,6 +14750,14 @@
                   },
                   {
                     "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  },
+                  {
+                    "key": {
                       "symbol": "withdrawn"
                     },
                     "val": {
@@ -14642,6 +14882,14 @@
                     },
                     "val": {
                       "address": "CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "use_oracle"
+                    },
+                    "val": {
+                      "bool": false
                     }
                   },
                   {
@@ -15885,843 +16133,6 @@
                     }
                   }
                 ]
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "1"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "2"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "3"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "4"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "5"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "6"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "7"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "8"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "9"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "10"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "11"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "12"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "13"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "14"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "15"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "16"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "17"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "18"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "19"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "20"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "21"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "22"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "23"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "24"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "25"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "26"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "27"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "28"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "29"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "30"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 500000
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXI7N",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "StreamVersion"
-                  },
-                  {
-                    "u64": "31"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "u32": 3
               }
             }
           },

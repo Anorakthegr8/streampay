@@ -102,12 +102,12 @@ pub use events::{
     BeneficiaryEnrolled, ContractFrozenStateChanged, ContractUpgraded, FeeCharged, FeeWithdrawn,
     GovernanceActionExecuted, GovernanceActionProposed, GovernanceActionSigned,
     GovernanceActionVetoed, GovernanceSignersSet, OperatorKeyRotated, OracleConfigUpdated,
-    OracleStaleFallback, OracleTimeReported, OwnershipAccepted, OwnershipProposed,
+    OracleStaleFallback, OracleTimeReported, OwnershipAccepted, OwnershipProposed, PauseStream,
     PolicyAssetExecuted, PolicyAssetQueued, PolicyHandoffAccepted, PolicyHandoffCancelled,
-    PolicyHandoffProposed, PolicyInitialized, ScheduledIntentCancelled, ScheduledIntentExpired,
-    ScheduledStreamExecuted, SponsorActiveSet, SponsorClaim, SponsorRegistered, StorageMigrated,
-    StreamCancelled, StreamCreated, StreamPolicySet, StreamScheduled, StreamToppedUp,
-    StreamsCreated, UpgradeCancelled, UpgradeProposed, Withdrawn,
+    PolicyHandoffProposed, PolicyInitialized, ResumeStream, ScheduledIntentCancelled,
+    ScheduledIntentExpired, ScheduledStreamExecuted, SponsorActiveSet, SponsorClaim,
+    SponsorRegistered, StorageMigrated, StreamCancelled, StreamCreated, StreamPolicySet,
+    StreamScheduled, StreamToppedUp, StreamsCreated, UpgradeCancelled, UpgradeProposed, Withdrawn,
 };
 pub use governance::{
     GovernanceAction, Proposal, DEFAULT_VETO_WINDOW_SECONDS, MAX_SIGNERS, MIN_VETO_WINDOW_SECONDS,

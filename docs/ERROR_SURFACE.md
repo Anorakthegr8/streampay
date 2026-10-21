@@ -87,6 +87,8 @@ Every expected failure is a `StreamError` with a stable numeric code. This docum
 | 77 | `GovernanceDuplicateSignature` | reachable (1 branch(es)) | `governance_sign` | this address already signed the proposal; execution needs two distinct keys |
 | 78 | `GovernanceSignaturesInsufficient` | reachable (1 branch(es)) | `governance_execute` | fewer than the required distinct, still-current signatures are recorded |
 | 79 | `GovernanceTimelockRequired` | reachable (1 branch(es)) | `execute_upgrade`, `migrate_storage`, `nominate_governor`, `propose_upgrade`, `set_fee_bps`, `set_frozen`, `set_oracle_config`, `set_stream_policy`, `withdraw_treasury` | the action requires an executed governance proposal now that governance is bootstrapped |
+| 80 | `PauseStreamNotAuthorized` | reachable (1 branch(es)) | `pause_stream` | the caller is not the stream sender |
+| 81 | `ResumeStreamNotAuthorized` | reachable (1 branch(es)) | `resume_stream` | the caller is not the stream sender |
 
 ## Branch matrix (entrypoint × condition → error)
 
@@ -103,8 +105,8 @@ Every expected failure is a `StreamError` with a stable numeric code. This docum
 | `CancelStreamNotAuthorized` | `cancel_stream` | `NotAuthorized` | 12 | the caller is neither the sender nor the recipient | reachable |
 | `TopUpAmountNonPositive` | `top_up` | `ZeroAmount` | 9 | top-up amount is zero or negative | reachable |
 | `TopUpDepositOverflow` | `top_up` | `MathOverflow` | 11 | deposit + amount would overflow i128 | reachable |
-| `PauseStreamNotAuthorized` | `pause_stream` | `PauseStreamNotAuthorized` | 64 | the caller is not the stream sender | reachable |
-| `ResumeStreamNotAuthorized` | `resume_stream` | `ResumeStreamNotAuthorized` | 65 | the caller is not the stream sender | reachable |
+| `PauseStreamNotAuthorized` | `pause_stream` | `PauseStreamNotAuthorized` | 80 | the caller is not the stream sender | reachable |
+| `ResumeStreamNotAuthorized` | `resume_stream` | `ResumeStreamNotAuthorized` | 81 | the caller is not the stream sender | reachable |
 | `StreamNotFound` | `get_stream`, `available`, `withdraw`, `withdraw_max`, `cancel_stream`, `top_up`, `sponsored_withdraw`, `pause_stream`, `resume_stream`, `propose_ownership_transfer`, `accept_ownership_transfer` | `StreamNotFound` | 1 | no stream is stored under the id | reachable |
 | `StreamNotActive` | `withdraw`, `withdraw_max`, `cancel_stream`, `top_up`, `sponsored_withdraw`, `pause_stream`, `resume_stream`, `propose_ownership_transfer`, `accept_ownership_transfer` | `StreamNotActive` | 5 | the stream status does not permit the requested lifecycle operation | reachable |
 | `CapacityOverflow` | `create_stream`, `create_streams`, `top_up` | `MathOverflow` | 11 | deposit * duration would overflow u128 | reachable |
