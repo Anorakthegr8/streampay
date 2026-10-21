@@ -36,10 +36,10 @@ pub enum StreamError {
     /// No stream exists with the provided id.
     StreamNotFound = 1,
     /// **Retired — never produced.** Reserved role check; retained so the
-    /// numeric code is never reused. See `docs/ERRORS.md`.
+    /// numeric code is never reused. See `docs/ERROR_SURFACE.md`.
     NotStreamSender = 2,
     /// **Retired — never produced.** Reserved role check; retained so the
-    /// numeric code is never reused. See `docs/ERRORS.md`.
+    /// numeric code is never reused. See `docs/ERROR_SURFACE.md`.
     NotStreamRecipient = 3,
     /// The stream is not `cancelable`, so the recipient cannot cancel it.
     StreamNotCancellable = 4,
@@ -70,6 +70,23 @@ pub enum StreamError {
     /// A treasury withdrawal exceeds the fees collected minus fees already
     /// withdrawn for that token.
     InsufficientTreasuryBalance = 17,
+    /// No sponsor budget is registered for the provided sponsor address.
+    SponsorNotFound = 49,
+    /// The sponsor's budget exists but is currently paused (inactive).
+    SponsorInactive = 50,
+    /// The beneficiary has no registered ed25519 consent key; they must
+    /// enroll once before a claim can be sponsored on their behalf.
+    BeneficiaryNotEnrolled = 51,
+    /// A sponsored claim was relayed after its signed `deadline`.
+    ClaimExpired = 52,
+    /// The claim's nonce was already spent by this sponsor for this
+    /// beneficiary — a replay of a previously sponsored call.
+    ClaimNonceReplay = 53,
+    /// Paying this claim would exceed the sponsor's per-period budget cap.
+    SponsorBudgetExceeded = 54,
+    /// Paying this claim would exceed the per-beneficiary cap within the
+    /// sponsor's current budget window.
+    BeneficiaryBudgetExceeded = 55,
     /// No scheduled intent exists with the provided id.
     IntentNotFound = 18,
     /// The scheduled intent is not pending (already executed, cancelled, or
@@ -151,10 +168,28 @@ pub enum StreamError {
     BatchEmpty = 47,
     /// Batch creation was requested with more entries than MAX_BATCH.
     BatchTooLarge = 48,
+    /// Oracle threshold is invalid (e.g., zero or exceeds publisher count).
+    InvalidOracleThreshold = 56,
+    /// Oracle publishers are not configured.
+    OraclePublishersNotConfigured = 57,
+    /// Oracle report timestamp is too far in the past or future.
+    OracleReportTooOld = 58,
+    /// The caller is not an authorized oracle publisher.
+    NotOraclePublisher = 59,
+    /// No two-step ownership proposal exists for this stream.
+    NoPendingOwnership = 60,
+    /// The pending ownership proposal's acceptance window has elapsed; the
+    /// target must be proposed again by the current role holder.
+    OwnershipProposalExpired = 61,
+    /// The proposed new owner is already the current holder of that role.
+    InvalidTransferTarget = 62,
+    /// An unexpired ownership proposal already exists for this stream; cancel
+    /// or accept it before proposing another.
+    OwnershipProposalPending = 63,
     /// The caller is not the sender authorized to pause the stream.
-    PauseStreamNotAuthorized = 49,
+    PauseStreamNotAuthorized = 64,
     /// The caller is not the sender authorized to resume the stream.
-    ResumeStreamNotAuthorized = 50,
+    ResumeStreamNotAuthorized = 65,
 }
 
 impl StreamError {
@@ -210,6 +245,21 @@ impl StreamError {
         StreamError::PolicyDepositBelowFloor,
         StreamError::BatchEmpty,
         StreamError::BatchTooLarge,
+        StreamError::SponsorNotFound,
+        StreamError::SponsorInactive,
+        StreamError::BeneficiaryNotEnrolled,
+        StreamError::ClaimExpired,
+        StreamError::ClaimNonceReplay,
+        StreamError::SponsorBudgetExceeded,
+        StreamError::BeneficiaryBudgetExceeded,
+        StreamError::InvalidOracleThreshold,
+        StreamError::OraclePublishersNotConfigured,
+        StreamError::OracleReportTooOld,
+        StreamError::NotOraclePublisher,
+        StreamError::NoPendingOwnership,
+        StreamError::OwnershipProposalExpired,
+        StreamError::InvalidTransferTarget,
+        StreamError::OwnershipProposalPending,
         StreamError::PauseStreamNotAuthorized,
         StreamError::ResumeStreamNotAuthorized,
     ];
