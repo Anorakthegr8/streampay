@@ -99,9 +99,11 @@ test("registry-known event missing a declared data field fails", () => {
   assert.throws(() => decodeEvent(event), /missing registry data field\(s\): withdrawn_total/);
 });
 
-test("non-stream-keyed registry events decode instead of crashing", () => {
-  // `fee_withdrawn` is keyed by `token`, not `stream_id` — before the
-  // registry this shape was mis-keyed; now it decodes with the token topic.
+test("registry events that declare no stream_id topic decode with a null stream", () => {
+  // `fee_withdrawn` is keyed by `token`, `contract_frozen_state_changed` by a
+  // bool. Neither is about a stream, and before the registry was authoritative
+  // the first positional topic was relabelled as one: a freeze event was indexed
+  // under stream id "true", and a fee event under the token's StrKey.
   const token = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM";
   const gov = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
   const event = rpcEvent(
@@ -115,8 +117,58 @@ test("non-stream-keyed registry events decode instead of crashing", () => {
   );
   const decoded = decodeEvent(event);
   assert.equal(decoded.name, "fee_withdrawn");
-  assert.equal(decoded.streamId, token);
+  assert.equal(decoded.streamId, null);
   assert.equal(decoded.data.amount, 3n);
+
+  const frozen = decodeEvent(
+    rpcEvent(
+      [xdr.ScVal.scvSymbol("contract_frozen_state_changed"), xdr.ScVal.scvBool(true)],
+      xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("changed_by"), val: nativeToScVal(gov, { type: "address" }) }),
+      ])
+    )
+  );
+  assert.equal(frozen.name, "contract_frozen_state_changed");
+  assert.equal(frozen.streamId, null, "a bool topic must not become a stream id");
+});
+
+test("the declared stream_id topic still populates the stream", () => {
+  // The null case above must not cost the events that do declare one.
+  const recipient = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+  const decoded = decodeEvent(
+    rpcEvent(
+      [xdr.ScVal.scvSymbol("withdrawn"), nativeToScVal(7n, { type: "u64" })],
+      xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("recipient"), val: nativeToScVal(recipient, { type: "address" }) }),
+        new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("amount"), val: nativeToScVal(2n, { type: "i128" }) }),
+        new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("withdrawn_total"), val: nativeToScVal(9n, { type: "i128" }) }),
+      ])
+    )
+  );
+  assert.equal(decoded.streamId, "7");
+});
+
+test("registry shapes apply only to the governed contract", () => {
+  // A third contract emitting the `withdrawn` symbol with a payload missing a
+  // declared field is somebody else's event: it must not be validated against
+  // our schema, and its topics must not be read as one of our stream ids.
+  const foreignContractId = "CBMYPHAKEU2XKVDE2UTQD6Q2X6YQ7UZKGOLLM3DPNVRPW7XHOOVMOA7A";
+  const event = rpcEvent(
+    [xdr.ScVal.scvSymbol("withdrawn"), nativeToScVal(4n, { type: "u64" })],
+    xdr.ScVal.scvMap([
+      new xdr.ScMapEntry({ key: xdr.ScVal.scvSymbol("amount"), val: nativeToScVal(2n, { type: "i128" }) }),
+    ])
+  );
+  const foreign = decodeEvent(event, { contractId: foreignContractId });
+  assert.equal(foreign.name, "withdrawn");
+  assert.equal(foreign.streamId, null);
+  assert.equal(foreign.data.amount, 2n);
+
+  // Same bytes from our own contract still fail the registry check.
+  assert.throws(
+    () => decodeEvent(event, { contractId: event.contractId }),
+    /missing registry data field\(s\): recipient, withdrawn_total/
+  );
 });
 
 test("extra data keys (additive registry evolution) are tolerated", () => {
