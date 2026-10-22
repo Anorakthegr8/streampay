@@ -189,6 +189,10 @@ The harness measures:
    - `cargo test -p streampay-contract --lib operation_order_matches_golden --locked`: All 9 golden traces match byte-for-byte.
 3. **Footprint Regression Harness**:
    - `hot_path_footprint_harness` in `contracts/streaming-payments/src/test.rs` permanently asserts that hot paths execute within instruction budgets:
+     - `create_stream` <= 560,000 CPU
+     - `withdraw` <= 360,000 CPU
+     - `cancel_stream` <= 560,000 CPU (raised from 540,000 for the dispute freeze lookup)
+     - `withdraw_max` <= 350,000 CPU
      - `create_stream` <= 560,000 CPU (541,608 measured)
      - `withdraw` <= 370,000 CPU (365,133 measured)
      - `cancel_stream` <= 545,000 CPU (538,801 measured)
