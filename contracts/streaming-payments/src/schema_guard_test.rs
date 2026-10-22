@@ -34,6 +34,7 @@ use crate::{
     policy::{PolicyDataKey, StreamPolicy},
     sponsor::SponsorKey,
     stream::{DataKey, OwnershipRole},
+    StreamingPayments,
 };
 
 fn hex_str(bytes: &[u8]) -> String {
@@ -92,11 +93,11 @@ fn read_leb128(bytes: &[u8]) -> Option<(u32, usize)> {
 
 /// Generates the canonical schema fingerprint representation.
 pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
-    let contract_id = Address::generate(env);
+    let governor = Address::generate(env);
+    let contract_id = env.register(StreamingPayments, (governor.clone(),));
     let sender = Address::generate(env);
     let recipient = Address::generate(env);
     let token = Address::generate(env);
-    let governor = Address::generate(env);
     let keeper = Address::generate(env);
     let admin = Address::generate(env);
     let bytes32 = BytesN::from_array(env, &[1u8; 32]);
@@ -107,53 +108,213 @@ pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
 
     // DataKey probe (21 variants)
     let datakey_cases: StdVec<(&str, &str, &str, DataKey)> = std::vec![
-        ("NextStreamId", "NextStreamId", "instance", DataKey::NextStreamId),
+        (
+            "NextStreamId",
+            "NextStreamId",
+            "instance",
+            DataKey::NextStreamId
+        ),
         ("Stream", "Stream(u64)", "persistent", DataKey::Stream(1)),
-        ("RecipientStreams", "RecipientStreams(Address)", "persistent", DataKey::RecipientStreams(recipient.clone())),
-        ("SenderStreams", "SenderStreams(Address)", "persistent", DataKey::SenderStreams(sender.clone())),
-        ("NextIntentId", "NextIntentId", "instance", DataKey::NextIntentId),
+        (
+            "RecipientStreams",
+            "RecipientStreams(Address)",
+            "persistent",
+            DataKey::RecipientStreams(recipient.clone())
+        ),
+        (
+            "SenderStreams",
+            "SenderStreams(Address)",
+            "persistent",
+            DataKey::SenderStreams(sender.clone())
+        ),
+        (
+            "NextIntentId",
+            "NextIntentId",
+            "instance",
+            DataKey::NextIntentId
+        ),
         ("Intent", "Intent(u64)", "persistent", DataKey::Intent(1)),
-        ("SenderIntents", "SenderIntents(Address)", "persistent", DataKey::SenderIntents(sender.clone())),
+        (
+            "SenderIntents",
+            "SenderIntents(Address)",
+            "persistent",
+            DataKey::SenderIntents(sender.clone())
+        ),
         ("Governor", "Governor", "instance", DataKey::Governor),
-        ("PendingGovernor", "PendingGovernor", "instance", DataKey::PendingGovernor),
+        (
+            "PendingGovernor",
+            "PendingGovernor",
+            "instance",
+            DataKey::PendingGovernor
+        ),
         ("FeeBps", "FeeBps", "instance", DataKey::FeeBps),
-        ("Treasury", "Treasury(Address)", "persistent", DataKey::Treasury(token.clone())),
-        ("StreamFee", "StreamFee(u64)", "persistent", DataKey::StreamFee(1)),
-        ("SchemaVersion", "SchemaVersion", "instance", DataKey::SchemaVersion),
-        ("ContractFrozen", "ContractFrozen", "instance", DataKey::ContractFrozen),
-        ("PendingUpgrade", "PendingUpgrade", "instance", DataKey::PendingUpgrade),
-        ("MigrationCursor", "MigrationCursor", "instance", DataKey::MigrationCursor),
-        ("OracleConfig", "OracleConfig", "instance", DataKey::OracleConfig),
-        ("OracleReport", "OracleReport(Address)", "persistent", DataKey::OracleReport(sender.clone())),
-        ("PendingOwnership", "PendingOwnership(u64)", "persistent", DataKey::PendingOwnership(1)),
-        ("PendingRateChange", "PendingRateChange(u64)", "persistent", DataKey::PendingRateChange(1)),
-        ("RateSegments", "RateSegments(u64)", "persistent", DataKey::RateSegments(1)),
+        (
+            "Treasury",
+            "Treasury(Address)",
+            "persistent",
+            DataKey::Treasury(token.clone())
+        ),
+        (
+            "StreamFee",
+            "StreamFee(u64)",
+            "persistent",
+            DataKey::StreamFee(1)
+        ),
+        (
+            "SchemaVersion",
+            "SchemaVersion",
+            "instance",
+            DataKey::SchemaVersion
+        ),
+        (
+            "ContractFrozen",
+            "ContractFrozen",
+            "instance",
+            DataKey::ContractFrozen
+        ),
+        (
+            "PendingUpgrade",
+            "PendingUpgrade",
+            "instance",
+            DataKey::PendingUpgrade
+        ),
+        (
+            "MigrationCursor",
+            "MigrationCursor",
+            "instance",
+            DataKey::MigrationCursor
+        ),
+        (
+            "OracleConfig",
+            "OracleConfig",
+            "instance",
+            DataKey::OracleConfig
+        ),
+        (
+            "OracleReport",
+            "OracleReport(Address)",
+            "persistent",
+            DataKey::OracleReport(sender.clone())
+        ),
+        (
+            "PendingOwnership",
+            "PendingOwnership(u64)",
+            "persistent",
+            DataKey::PendingOwnership(1)
+        ),
+        (
+            "PendingRateChange",
+            "PendingRateChange(u64)",
+            "persistent",
+            DataKey::PendingRateChange(1)
+        ),
+        (
+            "RateSegments",
+            "RateSegments(u64)",
+            "persistent",
+            DataKey::RateSegments(1)
+        ),
     ];
 
     let sponsor_key_cases: StdVec<(&str, &str, &str, SponsorKey)> = std::vec![
-        ("SponsorConfig", "SponsorConfig(Address)", "persistent", SponsorKey::SponsorConfig(sender.clone())),
-        ("OperatorKey", "OperatorKey(Address)", "persistent", SponsorKey::OperatorKey(sender.clone())),
-        ("SponsorPeriod", "SponsorPeriod(Address)", "persistent", SponsorKey::SponsorPeriod(sender.clone())),
-        ("BeneficiaryKey", "BeneficiaryKey(Address)", "persistent", SponsorKey::BeneficiaryKey(recipient.clone())),
-        ("BeneficiarySpend", "BeneficiarySpend(Address, Address)", "persistent", SponsorKey::BeneficiarySpend(sender.clone(), recipient.clone())),
-        ("ClaimNonce", "ClaimNonce(Address, Address, u64)", "persistent", SponsorKey::ClaimNonce(sender.clone(), recipient.clone(), 1)),
+        (
+            "SponsorConfig",
+            "SponsorConfig(Address)",
+            "persistent",
+            SponsorKey::SponsorConfig(sender.clone())
+        ),
+        (
+            "OperatorKey",
+            "OperatorKey(Address)",
+            "persistent",
+            SponsorKey::OperatorKey(sender.clone())
+        ),
+        (
+            "SponsorPeriod",
+            "SponsorPeriod(Address)",
+            "persistent",
+            SponsorKey::SponsorPeriod(sender.clone())
+        ),
+        (
+            "BeneficiaryKey",
+            "BeneficiaryKey(Address)",
+            "persistent",
+            SponsorKey::BeneficiaryKey(recipient.clone())
+        ),
+        (
+            "BeneficiarySpend",
+            "BeneficiarySpend(Address, Address)",
+            "persistent",
+            SponsorKey::BeneficiarySpend(sender.clone(), recipient.clone())
+        ),
+        (
+            "ClaimNonce",
+            "ClaimNonce(Address, Address, u64)",
+            "persistent",
+            SponsorKey::ClaimNonce(sender.clone(), recipient.clone(), 1)
+        ),
     ];
 
     let policy_key_cases: StdVec<(&str, &str, &str, PolicyDataKey)> = std::vec![
         ("Admin", "Admin", "instance", PolicyDataKey::Admin),
-        ("PendingAdmin", "PendingAdmin", "instance", PolicyDataKey::PendingAdmin),
-        ("TimelockDelay", "TimelockDelay", "instance", PolicyDataKey::TimelockDelay),
-        ("Asset", "Asset(Address)", "persistent", PolicyDataKey::Asset(token.clone())),
-        ("QueuedAsset", "QueuedAsset(Address)", "persistent", PolicyDataKey::QueuedAsset(token.clone())),
-        ("StreamPolicy", "StreamPolicy(Address)", "persistent", PolicyDataKey::StreamPolicy(token.clone())),
-        ("GlobalStreamPolicy", "GlobalStreamPolicy", "instance", PolicyDataKey::GlobalStreamPolicy),
+        (
+            "PendingAdmin",
+            "PendingAdmin",
+            "instance",
+            PolicyDataKey::PendingAdmin
+        ),
+        (
+            "TimelockDelay",
+            "TimelockDelay",
+            "instance",
+            PolicyDataKey::TimelockDelay
+        ),
+        (
+            "Asset",
+            "Asset(Address)",
+            "persistent",
+            PolicyDataKey::Asset(token.clone())
+        ),
+        (
+            "QueuedAsset",
+            "QueuedAsset(Address)",
+            "persistent",
+            PolicyDataKey::QueuedAsset(token.clone())
+        ),
+        (
+            "StreamPolicy",
+            "StreamPolicy(Address)",
+            "persistent",
+            PolicyDataKey::StreamPolicy(token.clone())
+        ),
+        (
+            "GlobalStreamPolicy",
+            "GlobalStreamPolicy",
+            "instance",
+            PolicyDataKey::GlobalStreamPolicy
+        ),
     ];
 
     let gov_key_cases: StdVec<(&str, &str, &str, GovernanceDataKey)> = std::vec![
         ("Signers", "Signers", "instance", GovernanceDataKey::Signers),
-        ("VetoWindow", "VetoWindow", "instance", GovernanceDataKey::VetoWindow),
-        ("ProposalCount", "ProposalCount", "instance", GovernanceDataKey::ProposalCount),
-        ("Proposal", "Proposal(u64)", "persistent", GovernanceDataKey::Proposal(1)),
+        (
+            "VetoWindow",
+            "VetoWindow",
+            "instance",
+            GovernanceDataKey::VetoWindow
+        ),
+        (
+            "ProposalCount",
+            "ProposalCount",
+            "instance",
+            GovernanceDataKey::ProposalCount
+        ),
+        (
+            "Proposal",
+            "Proposal(u64)",
+            "persistent",
+            GovernanceDataKey::Proposal(1)
+        ),
     ];
 
     env.as_contract(&contract_id, || {
@@ -910,7 +1071,10 @@ fn schema_fingerprint_matches_stored() {
         None
     };
 
-    if !generated["wasm_spec"]["available"].as_bool().unwrap_or(false) {
+    if !generated["wasm_spec"]["available"]
+        .as_bool()
+        .unwrap_or(false)
+    {
         if let Some(ref stored) = stored_opt {
             if let Some(stored_spec) = stored.get("wasm_spec") {
                 if stored_spec["available"].as_bool().unwrap_or(false) {
@@ -958,13 +1122,15 @@ fn schema_fingerprint_matches_stored() {
 
         let mut diff_report = String::new();
         if gen_keys != sto_keys {
-            diff_report.push_str("  [MISMATCH] Storage layout (keys / shapes / types / serialization)\n");
+            diff_report
+                .push_str("  [MISMATCH] Storage layout (keys / shapes / types / serialization)\n");
         }
         if gen_events != sto_events {
             diff_report.push_str("  [MISMATCH] Event payloads (event field names / topics / types / serialization)\n");
         }
         if gen_errors != sto_errors {
-            diff_report.push_str("  [MISMATCH] Error codes (StreamError numeric codes or variants)\n");
+            diff_report
+                .push_str("  [MISMATCH] Error codes (StreamError numeric codes or variants)\n");
         }
         if generated["wasm_spec"] != stored_json["wasm_spec"] {
             diff_report.push_str("  [MISMATCH] Built Wasm spec (contractspecv0 changed)\n");
