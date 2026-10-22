@@ -6,6 +6,8 @@ import { nativeToScVal, scValToNative, xdr } from "@stellar/stellar-sdk";
 import {
   decodeCreateStreamsBatchResult,
   decodeIntentStatus,
+  decodeStreamPayEvent,
+  addressToScVal,
   decodeOracleConfig,
   decodeScheduledIntent,
   decodeStream,
@@ -146,6 +148,57 @@ test("sponsored_withdraw accepts 64-byte signatures", () => {
   });
   assert.equal(encoded.length, 8);
   assert.deepEqual(scValToNative(encoded[6]!), signature);
+});
+
+test("decodes multi-topic events and events with no data fields", () => {
+  const contractId = new Uint8Array(32).fill(9);
+  const oracleEvent = {
+    type: { name: "contract" },
+    contractId: { value: contractId },
+    body: {
+      v0: {
+        topics: [
+          xdr.ScVal.scvSymbol("oracle_time_reported"),
+          addressToScVal(GOVERNOR),
+        ],
+        data: xdr.ScVal.scvMap([
+          new xdr.ScMapEntry({
+            key: xdr.ScVal.scvSymbol("ledger_time"),
+            val: nativeToScVal(42n, { type: "u64" }),
+          }),
+          new xdr.ScMapEntry({
+            key: xdr.ScVal.scvSymbol("reported_time"),
+            val: nativeToScVal(41n, { type: "u64" }),
+          }),
+        ]),
+      },
+    },
+  } as unknown as xdr.ContractEvent;
+
+  const decoded = decodeStreamPayEvent(oracleEvent);
+  assert.equal(decoded?.type, "OracleTimeReported");
+  if (decoded?.type !== "OracleTimeReported") throw new Error("wrong event type");
+  assert.equal(decoded.publisher, GOVERNOR);
+  assert.equal(decoded.reportedTime, 41n);
+  assert.equal(decoded.ledgerTime, 42n);
+
+  const handoffEvent = {
+    type: { name: "contract" },
+    contractId: { value: contractId },
+    body: {
+      v0: {
+        topics: [
+          xdr.ScVal.scvSymbol("policy_handoff_accepted"),
+          addressToScVal(GOVERNOR),
+        ],
+        data: xdr.ScVal.scvMap([]),
+      },
+    },
+  } as unknown as xdr.ContractEvent;
+  const handoff = decodeStreamPayEvent(handoffEvent);
+  assert.equal(handoff?.type, "PolicyHandoffAccepted");
+  if (handoff?.type !== "PolicyHandoffAccepted") throw new Error("wrong event type");
+  assert.equal(handoff.newAdmin, GOVERNOR);
 });
 
 test("batch results decode Ok values and contract errors per entry", () => {
