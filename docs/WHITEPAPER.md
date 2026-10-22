@@ -363,6 +363,17 @@ This is a sketch: the exact limit depends on the network's ledger-entry size set
 
 **Checked mechanically, not proven.** `contracts/streaming-payments/src/differential_harness.rs` checks the contract against the pure reference model in `model/` step by step. `fuzz/fuzz_targets/conservation.rs` checks a conservation equality closely related to Theorem 5.2. These are evidence, not proof.
 
+### 9.1 The event surface is a declared interface
+
+Consumer-facing event shapes are not prose. Each event is declared once as a `#[contractevent]` struct, and `schemas/events/`, both generated TypeScript modules and `docs/EVENTS.md` are derived from that declaration. What is enforced, rather than merely documented:
+
+- **Coverage is two-sided.** An event cannot be published before it is declared `[C56]`, and a declaration nothing emits is rejected too, so the registry cannot promise an event that never fires `[C57]`.
+- **Layout is part of the identity.** A payload-enum's variant names and payload types fold into the event's canonical shape, so reordering a variant's payload moves its fingerprint `[C58]`; positional topics are schema-typed alongside the data fields `[C59]`, and every event is catalogued with that fingerprint `[C60]`.
+- **Deletion is breaking.** Removing an event `[C61]`, a positional topic `[C62]` or a data field `[C64]`, or renaming a topic in place `[C63]`, fails the compatibility gate. Addition is allowed, but only with an event-changelog entry `[C65]`.
+- **The indexer reads the registry, not a guess.** A governed event missing a declared field is a hard error `[C66]`; the indexed stream id comes only from a topic the registry declares as `stream_id`, so an event about fees, governance, the oracle or the index carries `stream_id: null` instead of a value lifted from its first positional topic `[C67]`, and writes no stream projection `[C69]`; traffic from another contract id is journalled without any stream claim `[C68]`.
+
+None of this proves the *meaning* of an event is right — only that its shape cannot change silently underneath a consumer.
+
 ---
 
 ## Appendix A — claim-to-code traceability
@@ -432,4 +443,18 @@ It also checks that every `[Cn]` cited in the text has a row, and that every row
 | C53 | Cancel requires Active status | `contracts/streaming-payments/src/lib.rs:1197` | `return Err(surface::reject(Branch::StreamNotActive));` |
 | C54 | Top-up requires Active status | `contracts/streaming-payments/src/lib.rs:1317` | `return Err(surface::reject(Branch::StreamNotActive));` |
 | C55 | Batch creation computes the fee per input | `contracts/streaming-payments/src/lib.rs:638` | `let fee = treasury::fee_amount(input.deposit_amount, fee_bps)?;` |
+| C56 | An event with no declaration cannot be published, the registry scan fails the build | `contracts/streaming-payments/src/event_registry.rs:1035` | `Some(name) if !declared.contains(name.as_str()) => problems.push(format!(` |
+| C57 | A declaration nothing emits is rejected too, so the registry cannot promise an event that never fires | `contracts/streaming-payments/src/event_registry.rs:1061` | `declared events with no publish site: {never:?}` |
+| C58 | Payload-enum variant names and their payload types fold into the canonical shape, so variant order is wire-visible | `contracts/streaming-payments/src/event_registry.rs:148` | `"{name}{{payload_enum:{}}}",` |
+| C59 | Each event publishes a JSON Schema for its positional topics, not only its data fields | `contracts/streaming-payments/src/event_registry.rs:812` | `let mut topic_properties = Map::new();` |
+| C60 | The catalog indexes every event with its structural fingerprint | `contracts/streaming-payments/src/event_registry.rs:858` | `"fingerprint": e.fingerprint(defs),` |
+| C61 | Deleting a published event is a breaking change and fails the compatibility gate | `scripts/event_compat_check.mjs:68` | `REMOVED event ${name}` |
+| C62 | Deleting a positional topic is breaking | `scripts/event_compat_check.mjs:83` | `REMOVED topic field ${name}.${t.name} (position ${i})` |
+| C63 | Renaming a topic at a position is breaking, because topics are positional | `scripts/event_compat_check.mjs:86` | `topic at position ${i} changed name` |
+| C64 | Deleting a data field is breaking, because consumers decode it by name | `scripts/event_compat_check.mjs:109` | `REMOVED data field ${name}.${field}: ${type}` |
+| C65 | An added field is allowed only when the event changelog records it | `scripts/event_compat_check.mjs:98` | `MISSING CHANGELOG: added topic ${name}.${t.name} must be recorded in` |
+| C66 | The indexer refuses a governed event that omits a declared data field | `indexer/src/decoder.ts:74` | `is missing registry data field(s):` |
+| C67 | The indexed stream id comes only from a topic the registry declares as stream_id | `indexer/src/decoder.ts:69` | `if (field.name === "stream_id") streamId = String(positional[i]);` |
+| C68 | Events from another contract id are journalled without a stream claim | `indexer/src/decoder.ts:80` | `if (!fromGovernedContract) {` |
+| C69 | An event with no stream id writes no stream projection | `indexer/src/store.ts:223` | `if (event.streamId === null) {` |
 <!-- claims:end -->
