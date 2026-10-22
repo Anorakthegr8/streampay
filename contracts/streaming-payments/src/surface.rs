@@ -56,6 +56,13 @@ pub enum Branch {
     // --------------------------------------------------------------- top_up
     TopUpAmountNonPositive,
     TopUpDepositOverflow,
+    // ------------------------------------------------------------- disputes
+    CancelDuringDispute,
+    TopUpDuringDispute,
+    RaiseDisputeAlreadyActive,
+    DisputeNotOpen,
+    ExpireDisputeTooEarly,
+    ResolveCallerNotSender,
     // ------------------------------------------------- shared storage/math
     /// `stream.rs::get_stream` finds no stored entry.
     StreamNotFound,
@@ -282,7 +289,7 @@ impl Branch {
     /// Every branch, in declaration order. The matrix test walks this list and
     /// the coverage test requires each [`StreamError`] variant to be produced by
     /// one of these (or retired).
-    pub const ALL: [Branch; 110] = [
+    pub const ALL: [Branch; 116] = [
         Branch::CreateDepositNonPositive,
         Branch::CreateStartTimeInPast,
         Branch::CreateInvalidTimeRange,
@@ -294,6 +301,12 @@ impl Branch {
         Branch::CancelStreamNotAuthorized,
         Branch::TopUpAmountNonPositive,
         Branch::TopUpDepositOverflow,
+        Branch::CancelDuringDispute,
+        Branch::TopUpDuringDispute,
+        Branch::RaiseDisputeAlreadyActive,
+        Branch::DisputeNotOpen,
+        Branch::ExpireDisputeTooEarly,
+        Branch::ResolveCallerNotSender,
         Branch::StreamNotFound,
         Branch::StreamNotActive,
         Branch::CapacityOverflow,
@@ -413,6 +426,12 @@ impl Branch {
                 &["cancel_stream"]
             }
             Branch::TopUpAmountNonPositive | Branch::TopUpDepositOverflow => &["top_up"],
+            Branch::CancelDuringDispute => &["cancel_stream"],
+            Branch::TopUpDuringDispute => &["top_up"],
+            Branch::RaiseDisputeAlreadyActive => &["raise_dispute"],
+            Branch::DisputeNotOpen => &["get_dispute", "resolve_dispute", "expire_dispute"],
+            Branch::ExpireDisputeTooEarly => &["expire_dispute"],
+            Branch::ResolveCallerNotSender => &["resolve_dispute"],
             Branch::StreamNotFound => &[
                 "get_stream",
                 "available",
@@ -420,6 +439,10 @@ impl Branch {
                 "withdraw_max",
                 "cancel_stream",
                 "top_up",
+                "raise_dispute",
+                "expire_dispute",
+                "resolve_dispute",
+                "required_dispute_bond",
                 "sponsored_withdraw",
                 "propose_ownership_transfer",
                 "accept_ownership_transfer",
@@ -431,6 +454,7 @@ impl Branch {
                 "withdraw_max",
                 "cancel_stream",
                 "top_up",
+                "raise_dispute",
                 "sponsored_withdraw",
                 "propose_ownership_transfer",
                 "accept_ownership_transfer",
@@ -643,6 +667,12 @@ impl Branch {
             Branch::CancelStreamNotAuthorized => StreamError::NotAuthorized,
             Branch::TopUpAmountNonPositive => StreamError::ZeroAmount,
             Branch::TopUpDepositOverflow => StreamError::MathOverflow,
+            Branch::CancelDuringDispute => StreamError::DisputeActive,
+            Branch::TopUpDuringDispute => StreamError::DisputeActive,
+            Branch::RaiseDisputeAlreadyActive => StreamError::DisputeActive,
+            Branch::DisputeNotOpen => StreamError::DisputeNotFound,
+            Branch::ExpireDisputeTooEarly => StreamError::DisputeNotExpired,
+            Branch::ResolveCallerNotSender => StreamError::NotAuthorized,
             Branch::StreamNotFound => StreamError::StreamNotFound,
             Branch::StreamNotActive => StreamError::StreamNotActive,
             Branch::CapacityOverflow => StreamError::MathOverflow,
@@ -774,6 +804,14 @@ impl Branch {
             }
             Branch::TopUpAmountNonPositive => "top-up amount is zero or negative",
             Branch::TopUpDepositOverflow => "deposit + amount would overflow i128",
+            Branch::CancelDuringDispute => "an open dispute freezes cancel_stream",
+            Branch::TopUpDuringDispute => "an open dispute freezes top_up",
+            Branch::RaiseDisputeAlreadyActive => "raise_dispute called while a dispute is open",
+            Branch::DisputeNotOpen => "no open dispute exists on the stream",
+            Branch::ExpireDisputeTooEarly => {
+                "expire_dispute called before the dispute timelock elapsed"
+            }
+            Branch::ResolveCallerNotSender => "resolve_dispute called by a non-sender",
             Branch::StreamNotFound => "no stream is stored under the id",
             Branch::StreamNotActive => "the stream status is Cancelled or Depleted",
             Branch::CapacityOverflow => "deposit * duration would overflow u128",

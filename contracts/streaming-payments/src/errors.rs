@@ -558,9 +558,28 @@ pub enum StreamError {
     GovernanceTimelockRequired = 79,
     #[cfg_attr(
         not(target_family = "wasm"),
+        doc = " A dispute is open on the stream: `cancel_stream` and `top_up` are"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " frozen until the sender resolves it or the timelock expires."
+    )]
+    DisputeActive = 80,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " No open dispute exists on the stream."
+    )]
+    DisputeNotFound = 81,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The dispute's timelock has not elapsed yet."
+    )]
+    DisputeNotExpired = 82,
+    #[cfg_attr(
+        not(target_family = "wasm"),
         doc = " No rate-change proposal is stored for this stream."
     )]
-    NoPendingRateChange = 80,
+    NoPendingRateChange = 83,
     #[cfg_attr(
         not(target_family = "wasm"),
         doc = " The pending rate-change proposal's acceptance window has elapsed; the"
@@ -569,7 +588,7 @@ pub enum StreamError {
         not(target_family = "wasm"),
         doc = " rate must be proposed again by a stream party."
     )]
-    RateProposalExpired = 81,
+    RateProposalExpired = 84,
     #[cfg_attr(
         not(target_family = "wasm"),
         doc = " An unexpired rate-change proposal already exists for this stream; cancel"
@@ -578,7 +597,7 @@ pub enum StreamError {
         not(target_family = "wasm"),
         doc = " or accept it before proposing another."
     )]
-    RateProposalPending = 82,
+    RateProposalPending = 85,
     #[cfg_attr(
         not(target_family = "wasm"),
         doc = " The stream already carries the maximum number of rate segments"
@@ -587,7 +606,7 @@ pub enum StreamError {
         not(target_family = "wasm"),
         doc = " (`MAX_RATE_SEGMENTS`); cancel it or open a new stream instead."
     )]
-    TooManyRateSegments = 83,
+    TooManyRateSegments = 86,
 }
 
 impl StreamError {
@@ -674,6 +693,9 @@ impl StreamError {
         StreamError::GovernanceDuplicateSignature,
         StreamError::GovernanceSignaturesInsufficient,
         StreamError::GovernanceTimelockRequired,
+        StreamError::DisputeActive,
+        StreamError::DisputeNotFound,
+        StreamError::DisputeNotExpired,
         StreamError::NoPendingRateChange,
         StreamError::RateProposalExpired,
         StreamError::RateProposalPending,

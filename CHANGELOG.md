@@ -168,6 +168,20 @@ interface: they are only ever appended to, never renumbered or reused.
   branches or any branch without a code.
 - Generated [`docs/ERROR_SURFACE.md`](./docs/ERROR_SURFACE.md) (entrypoint × branch → code
   table) with a CI step that regenerates it and diffs the committed artifact.
+- Recipient-initiated dispute flow (#55): `raise_dispute` (bonded flag that
+  freezes `cancel_stream`/`top_up` for a 7-day timelock), sender-only
+  `resolve_dispute` (accept: bond refunded + pro-rata unwind; reject: bond
+  slashed to the sender, stream resumes), permissionless `expire_dispute`
+  (bond split 50/50, stream resumes), plus `get_dispute` /
+  `required_dispute_bond` views. Anti-griefing bond = 5% of the deposit
+  scaling linearly per dispute round on the stream; accrued withdrawals and
+  accrual are never frozen. New events `DisputeRaised` / `DisputeResolved` /
+  `DisputeExpired`; new `StreamError` codes `DisputeActive` (80),
+  `DisputeNotFound` (81), `DisputeNotExpired` (82), each wired into the
+  `surface.rs` branch registry with matrix probes. Covered by unit/property
+  tests (incl. the locks-plus-outstanding-bonds balance invariant) and a new
+  `dispute_bond` fuzz target. `docs/ARCHITECTURE.md` §8 documents the freeze
+  policy and griefing-threshold math.
 - **Gas sponsorship** (`sponsor.rs`, issue #57): sponsors pay transaction
   costs for recipients claiming accrued funds. Soroban has no mempool
   relayer, so authorization is carried *inside* the call: any account
@@ -186,7 +200,7 @@ interface: they are only ever appended to, never renumbered or reused.
   (appended): `SponsorNotFound` (21), `SponsorInactive` (22),
   `BeneficiaryNotEnrolled` (23), `ClaimExpired` (24), `ClaimNonceReplay`
   (25), `SponsorBudgetExceeded` (26), `BeneficiaryBudgetExceeded` (27);
-  18–20 remain reserved for the dispute-flow PR.
+  the dispute-flow codes append at 80–82 after the governance block.
 - Frontend "Claim for free" path (`frontend/lib/sponsor.ts` + stream detail
   page): builds and signs the exact intent the contract verifies, posts it
   to the sponsor relay, and discloses who pays and how much budget remains;
