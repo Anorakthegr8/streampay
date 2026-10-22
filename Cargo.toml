@@ -8,11 +8,9 @@ members = [
     "tools/streampay-state",
 ]
 # The fuzz harness is its own workspace (cargo-fuzz needs nightly-only
-# settings that must not leak into the contract build). The generated Rust SDK
-# is published independently and pins its own dependency set.
+# settings that must not leak into the contract build).
 exclude = [
     "fuzz",
-    "sdks/rust",
 ]
 
 [workspace.package]
