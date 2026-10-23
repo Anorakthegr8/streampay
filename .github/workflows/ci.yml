@@ -241,6 +241,18 @@ jobs:
         run: npm run test:parity
 
       # -----------------------------------------------------------------------
+      # Clock-skew suite (issue #211): the time-matrix harness runs the accrual
+      # paths under controlled skew between the three clocks (local Date.now(),
+      # simulate-at-ledger reads, ledger().timestamp() enforcement), and pins
+      # the never-over-up UX contract formalised in docs/TIME_HANDLING.md.
+      # Uses Node's built-in test runner + mock timers; no browser needed.
+      # -----------------------------------------------------------------------
+      - name: Clock-skew property + live-accrual tests
+        run: >-
+          node --experimental-strip-types --test
+          lib/clock-skew.test.ts lib/live-accrual.test.ts
+
+      # -----------------------------------------------------------------------
       # WCAG 2.1 AA accessibility gate (issue #98)
       #
       # Runs axe-core against HTML snapshots of every page and component.
