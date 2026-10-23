@@ -89,6 +89,8 @@ mod error_surface_test;
 
 mod dispute;
 mod errors;
+#[cfg(test)]
+mod event_registry;
 mod events;
 mod governance;
 #[cfg(test)]
