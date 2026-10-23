@@ -488,6 +488,85 @@
         }
       ]
     },
+    "DisputeExpired": {
+      "canonical": "streampay-event/v1|DisputeExpired|key=dispute_expired|topics=[stream_id:u64],data=[bond:i128,recipient:Address,recipient_share:i128,sender_share:i128]",
+      "data": [
+        {
+          "name": "recipient",
+          "type": "Address"
+        },
+        {
+          "name": "bond",
+          "type": "i128"
+        },
+        {
+          "name": "sender_share",
+          "type": "i128"
+        },
+        {
+          "name": "recipient_share",
+          "type": "i128"
+        }
+      ],
+      "event_key": "dispute_expired",
+      "fingerprint": "sha256:36b0c23354cbcac4fb502ca41a70ddfe1f9eb2c559c9db99d3de4f790abf7ca1",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
+    },
+    "DisputeRaised": {
+      "canonical": "streampay-event/v1|DisputeRaised|key=dispute_raised|topics=[stream_id:u64],data=[bond:i128,expires_at:u64,recipient:Address]",
+      "data": [
+        {
+          "name": "recipient",
+          "type": "Address"
+        },
+        {
+          "name": "bond",
+          "type": "i128"
+        },
+        {
+          "name": "expires_at",
+          "type": "u64"
+        }
+      ],
+      "event_key": "dispute_raised",
+      "fingerprint": "sha256:399f281f403122278e57a262ca22eb3ec626ba378130459f10789bd9179721c9",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
+    },
+    "DisputeResolved": {
+      "canonical": "streampay-event/v1|DisputeResolved|key=dispute_resolved|topics=[stream_id:u64],data=[accept:bool,bond:i128,sender:Address]",
+      "data": [
+        {
+          "name": "sender",
+          "type": "Address"
+        },
+        {
+          "name": "accept",
+          "type": "bool"
+        },
+        {
+          "name": "bond",
+          "type": "i128"
+        }
+      ],
+      "event_key": "dispute_resolved",
+      "fingerprint": "sha256:dd2cc4e7266dce42775243de26406c0ea108c7c9d6b1d8199a61484bd6253e13",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
+    },
     "FeeCharged": {
       "canonical": "streampay-event/v1|FeeCharged|key=fee_charged|topics=[stream_id:u64],data=[amount:i128,fee_bps:u32,payer:Address,token:Address]",
       "data": [
@@ -874,6 +953,76 @@
       "event_key": "policy_initialized",
       "fingerprint": "sha256:332dec01d9e44b08a077228239c6b3fdcc435b4c59862a9efd6d4001a7cbd44b",
       "topics": []
+    },
+    "RateChangeAccepted": {
+      "canonical": "streampay-event/v1|RateChangeAccepted|key=rate_change_accepted|topics=[stream_id:u64],data=[accepted_by:Address,adjustment:i128,deposit:i128,effective_from:u64,new_amount_per_second:i128,owed_at_change:i128,reserved_at_new_rate:i128]",
+      "data": [
+        {
+          "name": "accepted_by",
+          "type": "Address"
+        },
+        {
+          "name": "new_amount_per_second",
+          "type": "i128"
+        },
+        {
+          "name": "effective_from",
+          "type": "u64"
+        },
+        {
+          "name": "owed_at_change",
+          "type": "i128"
+        },
+        {
+          "name": "reserved_at_new_rate",
+          "type": "i128"
+        },
+        {
+          "name": "adjustment",
+          "type": "i128"
+        },
+        {
+          "name": "deposit",
+          "type": "i128"
+        }
+      ],
+      "event_key": "rate_change_accepted",
+      "fingerprint": "sha256:66b7fcbf7e912df0adfb728f6dd025e43a3678b76885950fb68c9e7b1ea41da3",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
+    },
+    "RateChangeProposed": {
+      "canonical": "streampay-event/v1|RateChangeProposed|key=rate_change_proposed|topics=[stream_id:u64],data=[amount_per_second:i128,counterparty:Address,expires_at:u64,proposed_by:Address]",
+      "data": [
+        {
+          "name": "proposed_by",
+          "type": "Address"
+        },
+        {
+          "name": "counterparty",
+          "type": "Address"
+        },
+        {
+          "name": "amount_per_second",
+          "type": "i128"
+        },
+        {
+          "name": "expires_at",
+          "type": "u64"
+        }
+      ],
+      "event_key": "rate_change_proposed",
+      "fingerprint": "sha256:9e2dec2cd991106085acabb92aaec4edf32ca518a688d2090ded15d91c7f70c0",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
     },
     "ScheduledIntentCancelled": {
       "canonical": "streampay-event/v1|ScheduledIntentCancelled|key=scheduled_intent_cancelled|topics=[intent_id:u64],data=[refund:i128,sender:Address]",
@@ -1323,6 +1472,9 @@
     "BeneficiaryEnrolled": "sha256:8a457d9c30ee67b51c5709af2eb838deacb19d55dc53a93055734d920e77e7d7",
     "ContractFrozenStateChanged": "sha256:090c0be66d60a23f3122acb9d4df26f1c2efea8c18828a5d48614b93692f8f7f",
     "ContractUpgraded": "sha256:0228c88243ed185f32359dd32f813d0c1df5ef393fbe5416fc120720020dc2fe",
+    "DisputeExpired": "sha256:36b0c23354cbcac4fb502ca41a70ddfe1f9eb2c559c9db99d3de4f790abf7ca1",
+    "DisputeRaised": "sha256:399f281f403122278e57a262ca22eb3ec626ba378130459f10789bd9179721c9",
+    "DisputeResolved": "sha256:dd2cc4e7266dce42775243de26406c0ea108c7c9d6b1d8199a61484bd6253e13",
     "FeeCharged": "sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da",
     "FeeWithdrawn": "sha256:9ff2fcadb55242503df39977b4db5c00d64728bc970fb0b58db39422bb5a516d",
     "GovernanceActionExecuted": "sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02",
@@ -1342,6 +1494,8 @@
     "PolicyHandoffCancelled": "sha256:fd8cfe1334f22571cb7e11fc9b80c3c1e7ef39e6f4bbd46c3a66fc621363f221",
     "PolicyHandoffProposed": "sha256:79bdf5f57bbb23c39096223624e7f61a65da6e8073bbc5ebb4b4294ecee9e75c",
     "PolicyInitialized": "sha256:332dec01d9e44b08a077228239c6b3fdcc435b4c59862a9efd6d4001a7cbd44b",
+    "RateChangeAccepted": "sha256:66b7fcbf7e912df0adfb728f6dd025e43a3678b76885950fb68c9e7b1ea41da3",
+    "RateChangeProposed": "sha256:9e2dec2cd991106085acabb92aaec4edf32ca518a688d2090ded15d91c7f70c0",
     "ScheduledIntentCancelled": "sha256:fe727619a69c546daa9f512a6cbe4162453a8404bd8dba614384557f162e5f0e",
     "ScheduledIntentExpired": "sha256:708a995061ac8713d9a6fc7ea04f7c39eee313276cc42fb0cd9268f3210500ee",
     "ScheduledStreamExecuted": "sha256:318937479fdb35060d6640657c70d51fcda211fc4408f5902b7eac1224f89f06",

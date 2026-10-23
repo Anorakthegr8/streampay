@@ -55,6 +55,34 @@ export interface ContractUpgradedEvent {
   executed_by: string;
 }
 
+/** Emitted when a dispute's timelock expires without a verdict: the stream resumes and the bond is split, `sender_share` rounding up. */
+/** Event key `dispute_expired` — fingerprint `sha256:36b0c23354cbcac4fb502ca41a70ddfe1f9eb2c559c9db99d3de4f790abf7ca1`. */
+export interface DisputeExpiredEvent {
+  stream_id: bigint;
+  recipient: string;
+  bond: bigint;
+  sender_share: bigint;
+  recipient_share: bigint;
+}
+
+/** Emitted when the recipient raises a dispute, freezing the stream's cancel/top-up mutations until resolution or expiry. The bond (stream token, held by the contract) accompanies the flag. */
+/** Event key `dispute_raised` — fingerprint `sha256:399f281f403122278e57a262ca22eb3ec626ba378130459f10789bd9179721c9`. */
+export interface DisputeRaisedEvent {
+  stream_id: bigint;
+  recipient: string;
+  bond: bigint;
+  expires_at: bigint;
+}
+
+/** Emitted when the sender resolves an open dispute. `accept = true` refunds the bond to the recipient and unwinds the stream pro-rata (a `StreamCancelled` event accompanies it); `accept = false` treats the dispute as bad-faith and slashes the bond to the sender, resuming the stream normally. */
+/** Event key `dispute_resolved` — fingerprint `sha256:dd2cc4e7266dce42775243de26406c0ea108c7c9d6b1d8199a61484bd6253e13`. */
+export interface DisputeResolvedEvent {
+  stream_id: bigint;
+  sender: string;
+  accept: boolean;
+  bond: bigint;
+}
+
 /** Emitted exactly once per funded stream that owes a protocol fee, in the same transaction as (and immediately after) `StreamCreated`. Keyed by `stream_id` so fee history is auditable per stream; the stream's stored fee (`stream_fee` read) and the token's `treasury_status` totals must always reconcile with the sum of these events — that reconciliation is the treasury invariant, checkable by anyone via `verify_treasury` and `scripts/verify-fees.ts`. */
 /** Event key `fee_charged` — fingerprint `sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da`. */
 export interface FeeChargedEvent {
@@ -203,6 +231,29 @@ export interface PolicyHandoffProposedEvent {
 /** Event key `policy_initialized` — fingerprint `sha256:332dec01d9e44b08a077228239c6b3fdcc435b4c59862a9efd6d4001a7cbd44b`. */
 export interface PolicyInitializedEvent {
   admin: string;
+}
+
+/** Emitted when a pending rate change is accepted and its rebalancing settles.  The four amounts are the whole funds-bug audit trail for one change, and they are exact by construction: `reserved_at_new_rate` is an integer product (`new_amount_per_second * window length`) and `deposit` is `owed_at_change + reserved_at_new_rate`. `adjustment` is the signed difference against the deposit before the change — positive means the sender topped up that amount, negative means the sender was refunded its absolute value, zero means the old reserve still covered the new rate exactly. */
+/** Event key `rate_change_accepted` — fingerprint `sha256:66b7fcbf7e912df0adfb728f6dd025e43a3678b76885950fb68c9e7b1ea41da3`. */
+export interface RateChangeAcceptedEvent {
+  stream_id: bigint;
+  accepted_by: string;
+  new_amount_per_second: bigint;
+  effective_from: bigint;
+  owed_at_change: bigint;
+  reserved_at_new_rate: bigint;
+  adjustment: bigint;
+  deposit: bigint;
+}
+
+/** Emitted when the sender or recipient proposes a new streaming rate. The change takes effect only when the counterparty accepts, and only from the moment of acceptance: nothing accrues differently before it, and the `RateChangeAccepted` event that follows carries the settled amounts. */
+/** Event key `rate_change_proposed` — fingerprint `sha256:9e2dec2cd991106085acabb92aaec4edf32ca518a688d2090ded15d91c7f70c0`. */
+export interface RateChangeProposedEvent {
+  stream_id: bigint;
+  proposed_by: string;
+  counterparty: string;
+  amount_per_second: bigint;
+  expires_at: bigint;
 }
 
 /** Emitted when a sender cancels a not-yet-executable intent and is refunded the escrow for all outstanding occurrences. */
@@ -365,6 +416,9 @@ export const EVENT_KEYS = {
   BeneficiaryEnrolled: "beneficiary_enrolled",
   ContractFrozenStateChanged: "contract_frozen_state_changed",
   ContractUpgraded: "contract_upgraded",
+  DisputeExpired: "dispute_expired",
+  DisputeRaised: "dispute_raised",
+  DisputeResolved: "dispute_resolved",
   FeeCharged: "fee_charged",
   FeeWithdrawn: "fee_withdrawn",
   GovernanceActionExecuted: "governance_action_executed",
@@ -384,6 +438,8 @@ export const EVENT_KEYS = {
   PolicyHandoffCancelled: "policy_handoff_cancelled",
   PolicyHandoffProposed: "policy_handoff_proposed",
   PolicyInitialized: "policy_initialized",
+  RateChangeAccepted: "rate_change_accepted",
+  RateChangeProposed: "rate_change_proposed",
   ScheduledIntentCancelled: "scheduled_intent_cancelled",
   ScheduledIntentExpired: "scheduled_intent_expired",
   ScheduledStreamExecuted: "scheduled_stream_executed",
@@ -406,7 +462,7 @@ export const EVENT_KEYS = {
 export type ContractEventName = (typeof EVENT_KEYS)[keyof typeof EVENT_KEYS];
 
 /** Every event this registry knows about, even if a consumer ignores it. */
-export const ALL_CONTRACT_EVENT_NAMES: readonly ContractEventName[] = ["beneficiary_enrolled", "contract_frozen_state_changed", "contract_upgraded", "fee_charged", "fee_withdrawn", "governance_action_executed", "governance_action_proposed", "governance_action_signed", "governance_action_vetoed", "governance_signers_set", "operator_key_rotated", "oracle_config_updated", "oracle_stale_fallback", "oracle_time_reported", "ownership_accepted", "ownership_proposed", "policy_asset_executed", "policy_asset_queued", "policy_handoff_accepted", "policy_handoff_cancelled", "policy_handoff_proposed", "policy_initialized", "scheduled_intent_cancelled", "scheduled_intent_expired", "scheduled_stream_executed", "sponsor_active_set", "sponsor_claim", "sponsor_registered", "storage_migrated", "stream_cancelled", "stream_created", "stream_policy_set", "stream_scheduled", "stream_topped_up", "streams_created", "upgrade_cancelled", "upgrade_proposed", "withdrawn"] as const;
+export const ALL_CONTRACT_EVENT_NAMES: readonly ContractEventName[] = ["beneficiary_enrolled", "contract_frozen_state_changed", "contract_upgraded", "dispute_expired", "dispute_raised", "dispute_resolved", "fee_charged", "fee_withdrawn", "governance_action_executed", "governance_action_proposed", "governance_action_signed", "governance_action_vetoed", "governance_signers_set", "operator_key_rotated", "oracle_config_updated", "oracle_stale_fallback", "oracle_time_reported", "ownership_accepted", "ownership_proposed", "policy_asset_executed", "policy_asset_queued", "policy_handoff_accepted", "policy_handoff_cancelled", "policy_handoff_proposed", "policy_initialized", "rate_change_accepted", "rate_change_proposed", "scheduled_intent_cancelled", "scheduled_intent_expired", "scheduled_stream_executed", "sponsor_active_set", "sponsor_claim", "sponsor_registered", "storage_migrated", "stream_cancelled", "stream_created", "stream_policy_set", "stream_scheduled", "stream_topped_up", "streams_created", "upgrade_cancelled", "upgrade_proposed", "withdrawn"] as const;
 
 /** Narrow an arbitrary RPC event name to a registered contract event. */
 export function isContractEventName(name: string): name is ContractEventName {
@@ -418,6 +474,9 @@ export const EVENT_STRUCT_BY_KEY: Record<ContractEventName, string> = {
   "beneficiary_enrolled": "BeneficiaryEnrolled",
   "contract_frozen_state_changed": "ContractFrozenStateChanged",
   "contract_upgraded": "ContractUpgraded",
+  "dispute_expired": "DisputeExpired",
+  "dispute_raised": "DisputeRaised",
+  "dispute_resolved": "DisputeResolved",
   "fee_charged": "FeeCharged",
   "fee_withdrawn": "FeeWithdrawn",
   "governance_action_executed": "GovernanceActionExecuted",
@@ -437,6 +496,8 @@ export const EVENT_STRUCT_BY_KEY: Record<ContractEventName, string> = {
   "policy_handoff_cancelled": "PolicyHandoffCancelled",
   "policy_handoff_proposed": "PolicyHandoffProposed",
   "policy_initialized": "PolicyInitialized",
+  "rate_change_accepted": "RateChangeAccepted",
+  "rate_change_proposed": "RateChangeProposed",
   "scheduled_intent_cancelled": "ScheduledIntentCancelled",
   "scheduled_intent_expired": "ScheduledIntentExpired",
   "scheduled_stream_executed": "ScheduledStreamExecuted",
@@ -477,6 +538,9 @@ export const EVENT_SHAPES: Record<ContractEventName, EventShape> = {
   "beneficiary_enrolled": { struct: "BeneficiaryEnrolled", eventKey: "beneficiary_enrolled", fingerprint: "sha256:8a457d9c30ee67b51c5709af2eb838deacb19d55dc53a93055734d920e77e7d7", topics: [{"name":"beneficiary","type":"Address"},{"name":"kind","type":"Symbol"}], data: [{"name":"public_key","type":"BytesN<32>"}] },
   "contract_frozen_state_changed": { struct: "ContractFrozenStateChanged", eventKey: "contract_frozen_state_changed", fingerprint: "sha256:090c0be66d60a23f3122acb9d4df26f1c2efea8c18828a5d48614b93692f8f7f", topics: [{"name":"frozen","type":"bool"}], data: [{"name":"changed_by","type":"Address"}] },
   "contract_upgraded": { struct: "ContractUpgraded", eventKey: "contract_upgraded", fingerprint: "sha256:0228c88243ed185f32359dd32f813d0c1df5ef393fbe5416fc120720020dc2fe", topics: [{"name":"new_wasm_hash","type":"BytesN<32>"}], data: [{"name":"executed_by","type":"Address"}] },
+  "dispute_expired": { struct: "DisputeExpired", eventKey: "dispute_expired", fingerprint: "sha256:36b0c23354cbcac4fb502ca41a70ddfe1f9eb2c559c9db99d3de4f790abf7ca1", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"recipient","type":"Address"},{"name":"bond","type":"i128"},{"name":"sender_share","type":"i128"},{"name":"recipient_share","type":"i128"}] },
+  "dispute_raised": { struct: "DisputeRaised", eventKey: "dispute_raised", fingerprint: "sha256:399f281f403122278e57a262ca22eb3ec626ba378130459f10789bd9179721c9", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"recipient","type":"Address"},{"name":"bond","type":"i128"},{"name":"expires_at","type":"u64"}] },
+  "dispute_resolved": { struct: "DisputeResolved", eventKey: "dispute_resolved", fingerprint: "sha256:dd2cc4e7266dce42775243de26406c0ea108c7c9d6b1d8199a61484bd6253e13", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"sender","type":"Address"},{"name":"accept","type":"bool"},{"name":"bond","type":"i128"}] },
   "fee_charged": { struct: "FeeCharged", eventKey: "fee_charged", fingerprint: "sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"token","type":"Address"},{"name":"payer","type":"Address"},{"name":"amount","type":"i128"},{"name":"fee_bps","type":"u32"}] },
   "fee_withdrawn": { struct: "FeeWithdrawn", eventKey: "fee_withdrawn", fingerprint: "sha256:9ff2fcadb55242503df39977b4db5c00d64728bc970fb0b58db39422bb5a516d", topics: [{"name":"token","type":"Address"}], data: [{"name":"governor","type":"Address"},{"name":"recipient","type":"Address"},{"name":"amount","type":"i128"},{"name":"withdrawn_total","type":"i128"}] },
   "governance_action_executed": { struct: "GovernanceActionExecuted", eventKey: "governance_action_executed", fingerprint: "sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02", topics: [{"name":"proposal_id","type":"u64"}], data: [{"name":"action","type":"GovernanceAction"},{"name":"signers","type":"Vec<Address>"},{"name":"executed_by","type":"Address"}] },
@@ -496,6 +560,8 @@ export const EVENT_SHAPES: Record<ContractEventName, EventShape> = {
   "policy_handoff_cancelled": { struct: "PolicyHandoffCancelled", eventKey: "policy_handoff_cancelled", fingerprint: "sha256:fd8cfe1334f22571cb7e11fc9b80c3c1e7ef39e6f4bbd46c3a66fc621363f221", topics: [{"name":"proposed_admin","type":"Address"}], data: [] },
   "policy_handoff_proposed": { struct: "PolicyHandoffProposed", eventKey: "policy_handoff_proposed", fingerprint: "sha256:79bdf5f57bbb23c39096223624e7f61a65da6e8073bbc5ebb4b4294ecee9e75c", topics: [{"name":"current_admin","type":"Address"}], data: [{"name":"proposed_admin","type":"Address"}] },
   "policy_initialized": { struct: "PolicyInitialized", eventKey: "policy_initialized", fingerprint: "sha256:332dec01d9e44b08a077228239c6b3fdcc435b4c59862a9efd6d4001a7cbd44b", topics: [], data: [{"name":"admin","type":"Address"}] },
+  "rate_change_accepted": { struct: "RateChangeAccepted", eventKey: "rate_change_accepted", fingerprint: "sha256:66b7fcbf7e912df0adfb728f6dd025e43a3678b76885950fb68c9e7b1ea41da3", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"accepted_by","type":"Address"},{"name":"new_amount_per_second","type":"i128"},{"name":"effective_from","type":"u64"},{"name":"owed_at_change","type":"i128"},{"name":"reserved_at_new_rate","type":"i128"},{"name":"adjustment","type":"i128"},{"name":"deposit","type":"i128"}] },
+  "rate_change_proposed": { struct: "RateChangeProposed", eventKey: "rate_change_proposed", fingerprint: "sha256:9e2dec2cd991106085acabb92aaec4edf32ca518a688d2090ded15d91c7f70c0", topics: [{"name":"stream_id","type":"u64"}], data: [{"name":"proposed_by","type":"Address"},{"name":"counterparty","type":"Address"},{"name":"amount_per_second","type":"i128"},{"name":"expires_at","type":"u64"}] },
   "scheduled_intent_cancelled": { struct: "ScheduledIntentCancelled", eventKey: "scheduled_intent_cancelled", fingerprint: "sha256:fe727619a69c546daa9f512a6cbe4162453a8404bd8dba614384557f162e5f0e", topics: [{"name":"intent_id","type":"u64"}], data: [{"name":"sender","type":"Address"},{"name":"refund","type":"i128"}] },
   "scheduled_intent_expired": { struct: "ScheduledIntentExpired", eventKey: "scheduled_intent_expired", fingerprint: "sha256:708a995061ac8713d9a6fc7ea04f7c39eee313276cc42fb0cd9268f3210500ee", topics: [{"name":"intent_id","type":"u64"}], data: [{"name":"sender","type":"Address"},{"name":"refund","type":"i128"}] },
   "scheduled_stream_executed": { struct: "ScheduledStreamExecuted", eventKey: "scheduled_stream_executed", fingerprint: "sha256:318937479fdb35060d6640657c70d51fcda211fc4408f5902b7eac1224f89f06", topics: [{"name":"intent_id","type":"u64"}], data: [{"name":"keeper","type":"Address"},{"name":"stream_id","type":"u64"},{"name":"occurrence_index","type":"u32"},{"name":"occurrences_remaining","type":"u32"},{"name":"fee_paid","type":"i128"}] },
@@ -519,6 +585,9 @@ export const EVENT_FINGERPRINTS: Record<string, string> = {
   "BeneficiaryEnrolled": "sha256:8a457d9c30ee67b51c5709af2eb838deacb19d55dc53a93055734d920e77e7d7",
   "ContractFrozenStateChanged": "sha256:090c0be66d60a23f3122acb9d4df26f1c2efea8c18828a5d48614b93692f8f7f",
   "ContractUpgraded": "sha256:0228c88243ed185f32359dd32f813d0c1df5ef393fbe5416fc120720020dc2fe",
+  "DisputeExpired": "sha256:36b0c23354cbcac4fb502ca41a70ddfe1f9eb2c559c9db99d3de4f790abf7ca1",
+  "DisputeRaised": "sha256:399f281f403122278e57a262ca22eb3ec626ba378130459f10789bd9179721c9",
+  "DisputeResolved": "sha256:dd2cc4e7266dce42775243de26406c0ea108c7c9d6b1d8199a61484bd6253e13",
   "FeeCharged": "sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da",
   "FeeWithdrawn": "sha256:9ff2fcadb55242503df39977b4db5c00d64728bc970fb0b58db39422bb5a516d",
   "GovernanceActionExecuted": "sha256:de687ceefc10aefae7e339b119adb836dd36507d01aaaf97c1b85fc222d8cc02",
@@ -538,6 +607,8 @@ export const EVENT_FINGERPRINTS: Record<string, string> = {
   "PolicyHandoffCancelled": "sha256:fd8cfe1334f22571cb7e11fc9b80c3c1e7ef39e6f4bbd46c3a66fc621363f221",
   "PolicyHandoffProposed": "sha256:79bdf5f57bbb23c39096223624e7f61a65da6e8073bbc5ebb4b4294ecee9e75c",
   "PolicyInitialized": "sha256:332dec01d9e44b08a077228239c6b3fdcc435b4c59862a9efd6d4001a7cbd44b",
+  "RateChangeAccepted": "sha256:66b7fcbf7e912df0adfb728f6dd025e43a3678b76885950fb68c9e7b1ea41da3",
+  "RateChangeProposed": "sha256:9e2dec2cd991106085acabb92aaec4edf32ca518a688d2090ded15d91c7f70c0",
   "ScheduledIntentCancelled": "sha256:fe727619a69c546daa9f512a6cbe4162453a8404bd8dba614384557f162e5f0e",
   "ScheduledIntentExpired": "sha256:708a995061ac8713d9a6fc7ea04f7c39eee313276cc42fb0cd9268f3210500ee",
   "ScheduledStreamExecuted": "sha256:318937479fdb35060d6640657c70d51fcda211fc4408f5902b7eac1224f89f06",

@@ -20,6 +20,24 @@
       "struct": "ContractUpgraded"
     },
     {
+      "event_key": "dispute_expired",
+      "fingerprint": "sha256:36b0c23354cbcac4fb502ca41a70ddfe1f9eb2c559c9db99d3de4f790abf7ca1",
+      "schema": "events/dispute_expired.json",
+      "struct": "DisputeExpired"
+    },
+    {
+      "event_key": "dispute_raised",
+      "fingerprint": "sha256:399f281f403122278e57a262ca22eb3ec626ba378130459f10789bd9179721c9",
+      "schema": "events/dispute_raised.json",
+      "struct": "DisputeRaised"
+    },
+    {
+      "event_key": "dispute_resolved",
+      "fingerprint": "sha256:dd2cc4e7266dce42775243de26406c0ea108c7c9d6b1d8199a61484bd6253e13",
+      "schema": "events/dispute_resolved.json",
+      "struct": "DisputeResolved"
+    },
+    {
       "event_key": "fee_charged",
       "fingerprint": "sha256:420b24e1ebc51ffeb444b36b41ea403e281b23304357650d811e145b4fb505da",
       "schema": "events/fee_charged.json",
@@ -132,6 +150,18 @@
       "fingerprint": "sha256:332dec01d9e44b08a077228239c6b3fdcc435b4c59862a9efd6d4001a7cbd44b",
       "schema": "events/policy_initialized.json",
       "struct": "PolicyInitialized"
+    },
+    {
+      "event_key": "rate_change_accepted",
+      "fingerprint": "sha256:66b7fcbf7e912df0adfb728f6dd025e43a3678b76885950fb68c9e7b1ea41da3",
+      "schema": "events/rate_change_accepted.json",
+      "struct": "RateChangeAccepted"
+    },
+    {
+      "event_key": "rate_change_proposed",
+      "fingerprint": "sha256:9e2dec2cd991106085acabb92aaec4edf32ca518a688d2090ded15d91c7f70c0",
+      "schema": "events/rate_change_proposed.json",
+      "struct": "RateChangeProposed"
     },
     {
       "event_key": "scheduled_intent_cancelled",

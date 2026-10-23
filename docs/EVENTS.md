@@ -9,6 +9,9 @@ Every event the contract emits, with its on-chain topic layout and decoded data 
 | `beneficiary_enrolled` | `BeneficiaryEnrolled` | `beneficiary: Address`, `kind: Symbol` | `public_key: BytesN<32>` | `sha256:8a457d9c30e…` |
 | `contract_frozen_state_changed` | `ContractFrozenStateChanged` | `frozen: bool` | `changed_by: Address` | `sha256:090c0be66d6…` |
 | `contract_upgraded` | `ContractUpgraded` | `new_wasm_hash: BytesN<32>` | `executed_by: Address` | `sha256:0228c88243e…` |
+| `dispute_expired` | `DisputeExpired` | `stream_id: u64` | `recipient: Address`, `bond: i128`, `sender_share: i128`, `recipient_share: i128` | `sha256:36b0c23354c…` |
+| `dispute_raised` | `DisputeRaised` | `stream_id: u64` | `recipient: Address`, `bond: i128`, `expires_at: u64` | `sha256:399f281f403…` |
+| `dispute_resolved` | `DisputeResolved` | `stream_id: u64` | `sender: Address`, `accept: bool`, `bond: i128` | `sha256:dd2cc4e7266…` |
 | `fee_charged` | `FeeCharged` | `stream_id: u64` | `token: Address`, `payer: Address`, `amount: i128`, `fee_bps: u32` | `sha256:420b24e1ebc…` |
 | `fee_withdrawn` | `FeeWithdrawn` | `token: Address` | `governor: Address`, `recipient: Address`, `amount: i128`, `withdrawn_total: i128` | `sha256:9ff2fcadb55…` |
 | `governance_action_executed` | `GovernanceActionExecuted` | `proposal_id: u64` | `action: GovernanceAction`, `signers: Vec<Address>`, `executed_by: Address` | `sha256:de687ceefc1…` |
@@ -28,6 +31,8 @@ Every event the contract emits, with its on-chain topic layout and decoded data 
 | `policy_handoff_cancelled` | `PolicyHandoffCancelled` | `proposed_admin: Address` | — | `sha256:fd8cfe1334f…` |
 | `policy_handoff_proposed` | `PolicyHandoffProposed` | `current_admin: Address` | `proposed_admin: Address` | `sha256:79bdf5f57bb…` |
 | `policy_initialized` | `PolicyInitialized` | — | `admin: Address` | `sha256:332dec01d9e…` |
+| `rate_change_accepted` | `RateChangeAccepted` | `stream_id: u64` | `accepted_by: Address`, `new_amount_per_second: i128`, `effective_from: u64`, `owed_at_change: i128`, `reserved_at_new_rate: i128`, `adjustment: i128`, `deposit: i128` | `sha256:66b7fcbf7e9…` |
+| `rate_change_proposed` | `RateChangeProposed` | `stream_id: u64` | `proposed_by: Address`, `counterparty: Address`, `amount_per_second: i128`, `expires_at: u64` | `sha256:9e2dec2cd99…` |
 | `scheduled_intent_cancelled` | `ScheduledIntentCancelled` | `intent_id: u64` | `sender: Address`, `refund: i128` | `sha256:fe727619a69…` |
 | `scheduled_intent_expired` | `ScheduledIntentExpired` | `intent_id: u64` | `sender: Address`, `refund: i128` | `sha256:708a995061a…` |
 | `scheduled_stream_executed` | `ScheduledStreamExecuted` | `intent_id: u64` | `keeper: Address`, `stream_id: u64`, `occurrence_index: u32`, `occurrences_remaining: u32`, `fee_paid: i128` | `sha256:318937479fd…` |
