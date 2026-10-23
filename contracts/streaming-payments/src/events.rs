@@ -320,6 +320,99 @@ pub struct FeeWithdrawn {
 
 #[cfg_attr(
     not(target_family = "wasm"),
+    doc = " Emitted when the recipient raises a dispute, freezing the stream's"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " cancel/top-up mutations until resolution or expiry. The bond (stream"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " token, held by the contract) accompanies the flag."
+)]
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeRaised {
+    #[topic]
+    pub stream_id: u64,
+    pub recipient: Address,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Bond pulled into the contract for the duration of the dispute."
+    )]
+    pub bond: i128,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " First ledger timestamp at which the dispute can be expired."
+    )]
+    pub expires_at: u64,
+}
+
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " Emitted when the sender resolves an open dispute. `accept = true`"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " refunds the bond to the recipient and unwinds the stream pro-rata"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " (a `StreamCancelled` event accompanies it); `accept = false` treats the"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " dispute as bad-faith and slashes the bond to the sender, resuming the"
+)]
+#[cfg_attr(not(target_family = "wasm"), doc = " stream normally.")]
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeResolved {
+    #[topic]
+    pub stream_id: u64,
+    pub sender: Address,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Whether the sender accepted the dispute as legitimate."
+    )]
+    pub accept: bool,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The bond at stake (paid to the recipient on accept, slashed to the"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " sender otherwise).")]
+    pub bond: i128,
+}
+
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " Emitted when a dispute's timelock expires without a verdict: the stream"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " resumes and the bond is split, `sender_share` rounding up."
+)]
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeExpired {
+    #[topic]
+    pub stream_id: u64,
+    pub recipient: Address,
+    pub bond: i128,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Half of the bond (rounded up) paid to the sender as compensation for"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " the frozen window.")]
+    pub sender_share: i128,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The remainder of the bond refunded to the recipient."
+    )]
+    pub recipient_share: i128,
+}
+#[cfg_attr(
+    not(target_family = "wasm"),
     doc = " Emitted when a sponsor registers (or reconfigures) a gas-sponsorship"
 )]
 #[cfg_attr(
