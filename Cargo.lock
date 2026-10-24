@@ -2596,9 +2596,12 @@ version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "proptest",
+ "quote",
  "serde_json",
+ "sha2",
  "soroban-sdk",
  "streampay-model",
+ "syn 2.0.119",
 ]
 
 [[package]]
