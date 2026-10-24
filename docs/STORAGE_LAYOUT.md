@@ -18,9 +18,18 @@ still make already-deployed instances unreadable. The silent ones:
 | Retyping a field (`u64` → `i128`, `bool` → `u32`) | both sides exist in Rust; the blob does not decode | `decode` (typed decode fails, message names the field) |
 | Adding/removing a struct field | the SDK tolerates it locally | `decode` (field diff names the missing/extra key) |
 | Mid-enum semantic shift (variant swapped, discriminant reused) | still decodes as the same Rust variant | `mid_enum::semantic_variant_shift_is_caught_even_when_decode_accepts_it` |
-| New storage key, new key enum variant | nothing old breaks; nothing new is pinned | `generate` panics on unknown keys; `decode::golden_manifest_covers_every_persisted_kind` |
+| New storage key, new key enum variant | nothing old breaks; nothing new is pinned | `kind_for_key`'s exhaustive match fails to compile first; then `generate` panics on unknown keys and `decode::golden_manifest_covers_every_persisted_kind` |
 | Event topic/payload layout (`#[topic]` moves a field into the topics) | indexers and off-chain readers break first | `decode::golden_events_roundtrip` |
 | A migration that loses or rewrites data across an upgrade | each build is internally consistent | `replay::upgrade_replay_preserves_every_record` |
+
+**Corpus gap as of this landing.** `DataKey` grew five variants after the corpus
+was cut: `oracle_config`, `oracle_report`, `pending_ownership`,
+`pending_rate_change`, `rate_segments`. They are dispatched by `kind_for_key` —
+which is why the branch that predated them stopped compiling the moment it merged
+— but they have no golden record and stay out of `COVERED_KINDS`. Pinning them
+means extending `scenario.rs` (report oracle time, propose an ownership transfer,
+propose and accept a rate change) and re-running the `#[ignore]`d generator with a
+release-line wasm, which is follow-up work rather than a merge condition.
 
 ## Layout
 
