@@ -349,6 +349,38 @@ its own issue with the freeze/upgrade atomicity question answered first. #54
 ships its interface and moves the gate under the documented rule; cutting the
 feature to hold 77 KB would be a product decision made by a size knob.
 
+## Gate decision — #426 (90 KB → 100 KB)
+
+#426 is the entrypoint addition the 90 KB comment named as the trigger. Its
+merged tree builds to **101,691 B** with the pinned stellar-cli 28.1.0, against
+the 91,534 B the 90 KB gate was set on — **+10,157 B**, and the gate moves to
+**100 KB** (102,400 B, 709 B of headroom), the same smallest-whole-KB rule.
+
+What the delta buys, and why it is not doc prose:
+
+| Addition | Count |
+|---|---|
+| New entrypoints | 15 — `create_stream_with_refund`, `set_refund_target`, `withdraw_many`, `propose_/accept_/cancel_ownership_transfer`, `pending_ownership_transfer`, `propose_/accept_/expire_sender_transfer`, `pending_sender_transfer`, `sender_history`, `refund_target`, `stream_record_version`, `migrate_stream_version` |
+| New events | 6 structs in `events.rs` (`BatchWithdrawSummary`, `StreamRecordMigrated`, `SenderTransferProposed`, `SenderTransferred`, `SenderTransferExpired`, `StreamRefundTargetChanged`) |
+| New error codes | 12 (87–98) |
+| New storage keys | 3 `DataKey` variants (`PendingSenderTransfer`, `SenderHistory`, `RefundTarget`) |
+| New dependencies | none |
+
+Probes before accepting the number:
+
+| Probe | Result |
+|---|---|
+| `gate_interface_docs.py --check` on the merged tree | **0 doc groups** — #426's interface items arrived already gated, so Technique 1 has nothing left to recover here (unlike the governance and dispute merges, which each gave back 5–6 KB). |
+| Per-entrypoint cost | ~680 B average, in line with the 1,499 B `accept_rate_change` / 2,195 B `governance_propose` range reported above: the transfer legs are preamble + storage rewrite, and the view functions are cheap. |
+| Dropping the batch/migration entrypoints to hold 90 KB | Rejected as a size-knob product decision — `withdraw_many` is the rent-amortisation path and `migrate_stream_version` is what makes the widened `Stream` readable for records written before it. |
+
+**The split is now overdue, not merely triggered.** At 709 B of headroom the very
+next interface addition fails this gate, which is the intended behaviour: the
+pre-declared next step (moving the governance/ownership-transfer families into
+their own contract, with the freeze-and-upgrade atomicity question answered
+first) is the work that has to happen before the interface grows again, not a
+number edit.
+
 ## Categories investigated and rejected (with measurements)
 
 | Candidate | Verdict |
