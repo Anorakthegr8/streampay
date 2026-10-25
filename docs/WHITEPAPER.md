@@ -443,11 +443,11 @@ It also checks that every `[Cn]` cited in the text has a row, and that every row
 | C53 |   Cancel requires Active status   | `contracts/streaming-payments/src/lib.rs:1686` | `return Err(surface::reject(Branch::StreamNotActive));` |
 | C54 |   Top-up requires Active status   | `contracts/streaming-payments/src/lib.rs:1814` | `return Err(surface::reject(Branch::StreamNotActive));` |
 | C55 |   Batch creation computes the fee per input   | `contracts/streaming-payments/src/lib.rs:894` | `let fee = treasury::fee_amount(input.deposit_amount, fee_bps)?;` |
-| C56 |   An event with no declaration cannot be published, the registry scan fails the build   | `contracts/streaming-payments/src/event_registry.rs:1035` | `Some(name) if !declared.contains(name.as_str()) => problems.push(format!(` |
-| C57 |   A declaration nothing emits is rejected too, so the registry cannot promise an event that never fires   | `contracts/streaming-payments/src/event_registry.rs:1061` | `declared events with no publish site: {never:?}` |
+| C56 |   An event with no declaration cannot be published, the registry scan fails the build   | `contracts/streaming-payments/src/event_registry.rs:1036` | `Some(name) if !declared.contains(name.as_str()) => problems.push(format!(` |
+| C57 |   A declaration nothing emits is rejected too, so the registry cannot promise an event that never fires   | `contracts/streaming-payments/src/event_registry.rs:1062` | `declared events with no publish site: {never:?}` |
 | C58 |   Payload-enum variant names and their payload types fold into the canonical shape, so variant order is wire-visible   | `contracts/streaming-payments/src/event_registry.rs:148` | `"{name}{{payload_enum:{}}}",` |
-| C59 |   Each event publishes a JSON Schema for its positional topics, not only its data fields   | `contracts/streaming-payments/src/event_registry.rs:812` | `let mut topic_properties = Map::new();` |
-| C60 |   The catalog indexes every event with its structural fingerprint   | `contracts/streaming-payments/src/event_registry.rs:858` | `"fingerprint": e.fingerprint(defs),` |
+| C59 |   Each event publishes a JSON Schema for its positional topics, not only its data fields   | `contracts/streaming-payments/src/event_registry.rs:813` | `let mut topic_properties = Map::new();` |
+| C60 |   The catalog indexes every event with its structural fingerprint   | `contracts/streaming-payments/src/event_registry.rs:859` | `"fingerprint": e.fingerprint(defs),` |
 | C61 |   Deleting a published event is a breaking change and fails the compatibility gate   | `scripts/event_compat_check.mjs:68` | `REMOVED event ${name}` |
 | C62 |   Deleting a positional topic is breaking   | `scripts/event_compat_check.mjs:83` | `REMOVED topic field ${name}.${t.name} (position ${i})` |
 | C63 |   Renaming a topic at a position is breaking, because topics are positional   | `scripts/event_compat_check.mjs:86` | `topic at position ${i} changed name` |
