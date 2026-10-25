@@ -750,6 +750,15 @@ pub enum StreamError {
     )]
     #[cfg_attr(not(target_family = "wasm"), doc = " de-duplicated.")]
     WithdrawDuplicateStreamIds = 98,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Invalid pause transition: `pause_stream` on a stream that is already"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " paused, or `resume_stream` on a stream that is not paused."
+    )]
+    InvalidPauseTransition = 99,
 }
 
 impl StreamError {
@@ -855,6 +864,7 @@ impl StreamError {
         StreamError::WithdrawBatchEmpty,
         StreamError::WithdrawBatchTooLarge,
         StreamError::WithdrawDuplicateStreamIds,
+        StreamError::InvalidPauseTransition,
     ];
 
     /// The stable numeric value carried across the contract boundary

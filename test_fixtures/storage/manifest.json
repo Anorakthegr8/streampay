@@ -600,6 +600,15 @@
       }
     },
     {
+      "file": "events/stream_paused.bin",
+      "name": "stream_paused",
+      "topics": "vec[symbol:stream_paused,u64:1]",
+      "data": "map{symbol:paused_at=u64:1701641600}",
+      "fields": {
+        "paused_at": "u64:1701641600"
+      }
+    },
+    {
       "file": "events/stream_policy_set.bin",
       "name": "stream_policy_set",
       "topics": "vec[symbol:stream_policy_set]",
@@ -607,6 +616,15 @@
       "fields": {
         "new_policy": "map{symbol:max_duration=u64:31536000,symbol:max_rate=i128:1000000,symbol:min_deposit=i128:1000,symbol:min_duration=u64:86400,symbol:min_rate=i128:100}",
         "token": "address:CCABDO7UZXYE4W6GVSEGSNNZTKSLFQGKXXQTH6OX7M7GKZ4Z6CUJNGZN"
+      }
+    },
+    {
+      "file": "events/stream_resumed.bin",
+      "name": "stream_resumed",
+      "topics": "vec[symbol:stream_resumed,u64:1]",
+      "data": "map{symbol:new_end_time=u64:1702678400}",
+      "fields": {
+        "new_end_time": "u64:1702678400"
       }
     },
     {

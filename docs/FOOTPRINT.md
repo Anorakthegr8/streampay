@@ -263,7 +263,9 @@ ratios inside each table are meaningful.
 
 Two numbers put the cap in context: a full 20-stream batch runs at 7.21M CPU
 against Soroban's 100M-instruction per-transaction ceiling, and the harness
-budgets it at 8,000,000 CPU. The ~0.8M of headroom the budget leaves is the
+budgets it at 8,600,000 CPU (8,000,000 before pause/resume, #24: each entry now
+also looks up its `StreamPause` side key, which takes the batch to 8.42M CPU on
+the same fixture). The ~0.8M of headroom the original budget left is the
 caller's own footprint, rent, and the transaction envelope — which is why the cap
 is 20 and not the 25 `create_streams_batch` allows: creation entries do not read
 a record, resolve an oracle, rewrite it, emit two events and transfer tokens.
@@ -301,21 +303,29 @@ a hot path is measured, not estimated.
      analysis — stay `#[ignore]`d).
    - `cargo test -p streampay-passkey`: All 14 tests pass.
 2. **CEI Golden Ordering Traces**:
-   - `cargo test -p streampay-contract --lib operation_order_matches_golden --locked`: All 17 golden traces match byte-for-byte.
+   - `cargo test -p streampay-contract --lib operation_order_matches_golden --locked`: All 18 golden traces match byte-for-byte.
 3. **Footprint Regression Harness**:
    - `hot_path_footprint_harness` in `contracts/streaming-payments/src/test.rs` permanently asserts that hot paths execute within instruction budgets:
      - `create_stream` <= 560,000 CPU (546,291 measured)
-     - `withdraw` <= 380,000 CPU (372,647 measured; 365,133 before the record
-       envelope, 347,082 before #54)
-     - `cancel_stream` <= 600,000 CPU (590,248 measured — 538,801 with #54's
-       schedule read, 552,355 with the envelope on top, and the routed-refund
-       read for the rest; 540,000 was the pre-dispute budget)
-     - `withdraw_max` <= 385,000 CPU (376,172 measured)
-     - `withdraw` on a renegotiated (two-window) stream <= 425,000 CPU (414,184 measured)
+     - `withdraw` <= 398,000 CPU (389,128 measured; 372,647 before the
+       pause side-key lookup (#24), 365,133 before the record envelope, 347,082
+       before #54)
+     - `cancel_stream` <= 620,000 CPU (608,330 measured — 538,801 with #54's
+       schedule read, 552,355 with the envelope on top, 590,248 with the
+       routed-refund read, and the pause side-key lookup for the rest; 540,000
+       was the pre-dispute budget)
+     - `withdraw_max` <= 402,000 CPU (393,457 measured; 376,172 before #24)
+     - `withdraw` on a renegotiated (two-window) stream <= 458,000 CPU (448,929 measured; 414,184 before #24)
      - `set_refund_target` <= 150,000 CPU (140,812 measured) — one read of the
        stream, one key overwrite, no token transfer
+   - Pause/resume (#24) keeps its state under its own `StreamPause(id)` key
+     rather than adding fields to `Stream` (which would change the stored
+     layout of every existing stream), so every accrual path pays one more
+     persistent lookup even for a stream that was never paused; the budgets
+     above were re-measured with that lookup in place.
    - `full_schedule_pricing_is_bounded` asserts the worst case a schedule can
      produce — a stream at the 32-segment cap — at <= 850,000 CPU (828,425 measured).
    - `withdraw_many_footprint_harness` measures §4.1 and asserts that a
-     full 20-id batch stays under 8,000,000 CPU and costs less than the same
+     full 20-id batch stays under 8,600,000 CPU (8,000,000 before #24's
+     per-entry pause lookup) and costs less than the same
      twenty claims issued as separate transactions.

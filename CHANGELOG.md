@@ -10,6 +10,18 @@ interface: they are only ever appended to, never renumbered or reused.
 ## [Unreleased]
 
 ### Added
+- Stream pause / resume (#24): `pause_stream` and `resume_stream`, sender only.
+  While a stream is paused its accrual is frozen at the pause point (on the
+  stream's own clock, so oracle-time streams freeze at the oracle time);
+  `withdraw`, `withdraw_max`, `withdraw_many`, `cancel_stream` and rate changes
+  all evaluate against the frozen time, so a paused stream cannot be drained.
+  Resuming shifts the window (and any rate segments) forward by the paused
+  length, so accrual continues from the frozen amount at the original rate and
+  the full deposit still streams. Pause state lives in a new persistent
+  `StreamPause(id)` side key rather than in `Stream`, so records written by a
+  deployed build keep decoding. Adds the `stream_paused` / `stream_resumed`
+  events and error code 99 `InvalidPauseTransition` (pause while paused, or
+  resume while not paused); only `Active` streams can pause.
 - Two-step rate renegotiation (#54): `propose_rate_change`,
   `accept_rate_change`, `cancel_rate_change`, and the `pending_rate_change` and
   `rate_segments` read views. Either party can propose a new

@@ -6,6 +6,17 @@ be mentioned here — by event struct name and field name — before the PR can
 merge. Breaking changes are rejected outright; they need a governed
 v1 → v2 migration (see [README.md](README.md#versioning-v1--v2-coexistence)).
 
+## v1.0.3 — 2026-10-25 (stream pause / resume, issue #24)
+
+Two additive events; no existing event changed shape (entry count 49 → 51).
+Both carry the positional topic `stream_id:u64`:
+
+- `StreamPaused`: added event (key `stream_paused`, data `paused_at`) — emitted
+  by `pause_stream` with the stream-clock time accrual froze at.
+- `StreamResumed`: added event (key `stream_resumed`, data `new_end_time`) —
+  emitted by `resume_stream` with the window's `end_time` after it shifted by
+  the paused length.
+
 ## v1.0.2 — 2026-10-24 (six events for schema versioning, sender transfer, refund routing and batch claiming)
 
 Six events are newly published by `contracts/streaming-payments/src/events.rs`;

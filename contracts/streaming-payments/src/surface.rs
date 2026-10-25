@@ -325,13 +325,20 @@ pub enum Branch {
     /// `withdraw_many`: summing the per-entry amounts into the summary's
     /// `total` would overflow `i128`.
     WithdrawManyTotalOverflow,
+    // ------------------------------------------------------- pause / resume
+    /// `pause_stream` / `resume_stream`: the caller is not the stream sender.
+    PauseNotAuthorized,
+    /// `pause_stream`: the stream is already paused.
+    PauseAlreadyPaused,
+    /// `resume_stream`: the stream is not paused.
+    ResumeNotPaused,
 }
 
 impl Branch {
     /// Every branch, in declaration order. The matrix test walks this list and
     /// the coverage test requires each [`StreamError`] variant to be produced by
     /// one of these (or retired).
-    pub const ALL: [Branch; 130] = [
+    pub const ALL: [Branch; 133] = [
         Branch::CreateDepositNonPositive,
         Branch::CreateStartTimeInPast,
         Branch::CreateInvalidTimeRange,
@@ -462,6 +469,9 @@ impl Branch {
         Branch::WithdrawManyDuplicateIds,
         Branch::WithdrawManyNotStreamRecipient,
         Branch::WithdrawManyTotalOverflow,
+        Branch::PauseNotAuthorized,
+        Branch::PauseAlreadyPaused,
+        Branch::ResumeNotPaused,
     ];
 
     /// The entrypoint(s) through which this branch can fire. Shared helpers
@@ -517,6 +527,8 @@ impl Branch {
                 "migrate_stream_version",
                 "refund_target",
                 "sender_history",
+                "pause_stream",
+                "resume_stream",
             ],
             Branch::StreamNotActive => &[
                 "withdraw",
@@ -533,6 +545,8 @@ impl Branch {
                 "propose_sender_transfer",
                 "accept_sender_transfer",
                 "set_refund_target",
+                "pause_stream",
+                "resume_stream",
             ],
             Branch::CapacityOverflow => &["create_stream", "top_up", "accept_rate_change"],
             Branch::RateProductOverflow => &[
@@ -728,6 +742,10 @@ impl Branch {
             | Branch::RatePolicyAboveCeiling
             | Branch::RateTopUpTransferFailed
             | Branch::RateRefundFailed => &["accept_rate_change"],
+            // ------------------------------------------------------- pause / resume
+            Branch::PauseNotAuthorized => &["pause_stream", "resume_stream"],
+            Branch::PauseAlreadyPaused => &["pause_stream"],
+            Branch::ResumeNotPaused => &["resume_stream"],
             Branch::NoPendingRateChange => &["accept_rate_change", "cancel_rate_change"],
             Branch::RateCancelNotProposer => &["cancel_rate_change"],
             Branch::RateSegmentSumOverflow => &[
@@ -871,6 +889,11 @@ impl Branch {
             Branch::RatePolicyAboveCeiling => StreamError::PolicyRateAboveCeiling,
             Branch::RateTopUpTransferFailed => StreamError::TopUpTransferFailed,
             Branch::RateRefundFailed => StreamError::SenderRefundFailed,
+            // ------------------------------------------------------- pause / resume
+            Branch::PauseNotAuthorized => StreamError::NotAuthorized,
+            Branch::PauseAlreadyPaused | Branch::ResumeNotPaused => {
+                StreamError::InvalidPauseTransition
+            }
             Branch::GovernanceNotInitialized => StreamError::GovernanceNotInitialized,
             Branch::GovernanceAlreadyInitialized => StreamError::GovernanceAlreadyInitialized,
             Branch::NotGovernanceSigner => StreamError::NotGovernanceSigner,
@@ -1108,6 +1131,10 @@ impl Branch {
             Branch::RateRefundFailed => {
                 "the token refuses the refund of the escrow a rate decrease frees"
             }
+            // ------------------------------------------------------- pause / resume
+            Branch::PauseNotAuthorized => "the caller is not the stream's sender",
+            Branch::PauseAlreadyPaused => "the stream is already paused",
+            Branch::ResumeNotPaused => "the stream is not paused",
             // ------------------------------------------------------------ governance
             Branch::GovernanceNotInitialized => {
                 "the governance signer set has not been bootstrapped"

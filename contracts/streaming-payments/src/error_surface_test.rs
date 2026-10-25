@@ -1680,6 +1680,32 @@ fn probe(branch: Branch) -> Option<StreamError> {
                 .try_withdraw_many(&other, &ids, &false)))
         }
         Branch::WithdrawManyTotalOverflow => None,
+        // ------------------------------------------------------- pause / resume
+        Branch::PauseNotAuthorized => {
+            let f = Fixture::setup_quiet();
+            let id = f.create_stream(DEPOSIT, DAY, 10 * DAY, false);
+            Some(rejected!(f
+                .client
+                .mock_all_auths()
+                .try_pause_stream(&f.recipient, &id)))
+        }
+        Branch::PauseAlreadyPaused => {
+            let f = Fixture::setup_quiet();
+            let id = f.create_stream(DEPOSIT, DAY, 10 * DAY, false);
+            f.client.mock_all_auths().pause_stream(&f.sender, &id);
+            Some(rejected!(f
+                .client
+                .mock_all_auths()
+                .try_pause_stream(&f.sender, &id)))
+        }
+        Branch::ResumeNotPaused => {
+            let f = Fixture::setup_quiet();
+            let id = f.create_stream(DEPOSIT, DAY, 10 * DAY, false);
+            Some(rejected!(f
+                .client
+                .mock_all_auths()
+                .try_resume_stream(&f.sender, &id)))
+        }
     }
 }
 
@@ -1860,6 +1886,7 @@ fn stream_error_variant_list_is_exhaustive() {
             | StreamError::RateProposalExpired
             | StreamError::RateProposalPending
             | StreamError::TooManyRateSegments
+            | StreamError::InvalidPauseTransition
             | StreamError::GovernanceNotInitialized
             | StreamError::GovernanceAlreadyInitialized
             | StreamError::NotGovernanceSigner
