@@ -21,7 +21,7 @@ StreamPay is a high-assurance, continuous payment streaming engine implemented f
 - **Formal Verification Study & Invariant Proofs**: [`docs/VERIFICATION.md`](./VERIFICATION.md)
 - **Reproducible Build Verification**: [`docs/REPRODUCING.md`](./REPRODUCING.md)
 - **Conservation Property Fuzzing**: [`docs/CONSERVATION_FUZZ.md`](./CONSERVATION_FUZZ.md)
-- **Error Surface & Status Code Catalog**: [`docs/ERRORS.md`](./ERRORS.md)
+- **Error Surface & Status Code Catalog**: [`docs/errors.md`](./errors.md)
 
 ---
 
