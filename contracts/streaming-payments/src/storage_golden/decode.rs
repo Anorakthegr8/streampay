@@ -2,10 +2,19 @@
 //! in-development `#[contracttype]` types and re-encode to XDR whose
 //! field map equals the manifest's, field by field. Failure messages name
 //! the exact field that changed (never "bytes differ" alone).
+//!
+//! One concession is built into that rule and is itself tested: a key the
+//! current build adds whose value renders as `void` is an `Option` field
+//! introduced after the corpus was cut, which is a wire-compatible addition
+//! (`docs/STORAGE_LAYOUT.md`). It is reported as a note, not a regression,
+//! and `compatible_addition_rule_accepts_void_and_nothing_else` proves the
+//! tolerance reaches no further than that exact shape.
 
+use std::collections::BTreeMap;
 use std::format;
 use std::panic;
-use std::string::String;
+use std::string::{String, ToString};
+use std::vec;
 use std::vec::Vec;
 
 use soroban_sdk::xdr::{self, LedgerEntryData, ReadXdr, WriteXdr};
@@ -17,8 +26,8 @@ use crate::stream::{PendingUpgrade, Stream, StreamStatus};
 use crate::treasury::{StreamFeeRecord, Treasury};
 
 use super::{
-    contract_data, diff_fields, fields_of, fixtures_dir, read_event_bin, read_manifest,
-    read_record_bin, RecordMeta,
+    contract_data, diff_fields, fields_of, fixtures_dir, optional_additions, read_event_bin,
+    read_manifest, read_record_bin, without_added_keys, RecordMeta,
 };
 
 /// Number of topics each event must carry: the name symbol plus however
@@ -137,16 +146,20 @@ fn golden_manifest_covers_every_persisted_kind() {
 
 /// Core CI assertion. For every golden record:
 /// 1. the typed decoder of the in-development build accepts the blob;
-/// 2. re-encoding the decoded value flattens to exactly the manifest's
-///    field map — every change is reported as `{file}.{field}:
-///    golden=… decoded=…`;
-/// 3. the raw re-encoded bytes equal the golden bytes (belt and braces:
-///    catches ordering changes the flat render cannot see).
+/// 2. re-encoding the decoded value flattens to the manifest's field map —
+///    every change is reported as `{file}.{field}: golden=… decoded=…`,
+///    except an added key the current build writes as VOID, which is a
+///    compatible optional-field addition (see `optional_additions`) and is
+///    reported as a note instead;
+/// 3. the raw re-encoded bytes equal the golden bytes, compared over the
+///    release-line key set (belt and braces: catches ordering changes the
+///    flat render cannot see).
 #[test]
 fn golden_records_decode_and_roundtrip() {
     let env = Env::default();
     let manifest = read_manifest();
     let mut failures: Vec<String> = Vec::new();
+    let mut notes: Vec<String> = Vec::new();
 
     for meta in &manifest.records {
         // The key must still be a known storage-key variant (dispatch
@@ -187,14 +200,30 @@ fn golden_records_decode_and_roundtrip() {
         };
 
         let got_fields = fields_of(&env, &meta.kind, &decoded);
+        let additions = optional_additions(&golden_fields, &got_fields);
+        let compared: BTreeMap<String, String> = got_fields
+            .iter()
+            .filter(|(k, _)| !additions.contains(k))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if !additions.is_empty() {
+            notes.push(format!(
+                "{} [kind {}]: the current build writes {} as VOID on records the release \
+                 line never set — accepted as an optional field added since the corpus was cut",
+                meta.file,
+                meta.kind,
+                additions.join(", ")
+            ));
+        }
         let mut ds: Vec<String> = diff_fields(
             &format!("{} [golden vs typed decode]", meta.file),
             &golden_fields,
-            &got_fields,
+            &compared,
         );
         if ds.is_empty() {
             let want_bytes = val.to_xdr(xdr::Limits::none()).unwrap();
-            let got_bytes = decoded.to_xdr(xdr::Limits::none()).unwrap();
+            let probe = without_added_keys(&decoded, &additions);
+            let got_bytes = probe.to_xdr(xdr::Limits::none()).unwrap();
             if want_bytes != got_bytes {
                 ds.push(format!(
                     "{}: field map matches but raw wire bytes differ (golden {} bytes, decoded {} bytes)",
@@ -205,6 +234,10 @@ fn golden_records_decode_and_roundtrip() {
             }
         }
         failures.extend(ds);
+    }
+
+    for note in &notes {
+        eprintln!("COMPATIBLE ADDITION: {note}");
     }
 
     assert!(
@@ -362,5 +395,101 @@ fn harness_detects_field_rename_by_construction() {
     assert!(
         caught,
         "renaming start_time produced no decode failure and no field diff: {ds:?}"
+    );
+}
+
+/// By-construction guard on the compatible-addition concession
+/// (`optional_additions`): it accepts a VOID-valued key the release line
+/// never wrote — the one shape an additive `Option` widening leaves on the
+/// wire — and nothing else. Without this test the concession would be the
+/// hole the suite exists to close, because the shape it tolerates is
+/// syntactically the same shape as a new field.
+#[test]
+fn compatible_addition_rule_accepts_void_and_nothing_else() {
+    let env = Env::default();
+    let meta = read_manifest()
+        .records
+        .into_iter()
+        .find(|r| r.kind == "stream")
+        .expect("golden stream record");
+    let golden_val = value_of(&meta);
+    let xdr::ScVal::Map(Some(m)) = golden_val.clone() else {
+        panic!("golden stream is not a map");
+    };
+    let entries: Vec<xdr::ScMapEntry> = m.0.iter().cloned().collect();
+    let golden = fields_of(&env, "stream", &golden_val);
+    let field = |name: &str, val: xdr::ScVal| xdr::ScMapEntry {
+        key: xdr::ScVal::Symbol(xdr::ScSymbol(name.try_into().unwrap())),
+        val,
+    };
+    let map_of = |mut extra: Vec<xdr::ScMapEntry>| {
+        let mut es = entries.clone();
+        es.append(&mut extra);
+        xdr::ScVal::Map(Some(xdr::ScMap(xdr::VecM::try_from(es).unwrap())))
+    };
+    let compared = |got: &xdr::ScVal| {
+        let got_fields = fields_of(&env, "stream", got);
+        let additions = optional_additions(&golden, &got_fields);
+        let kept: BTreeMap<String, String> = got_fields
+            .iter()
+            .filter(|(k, _)| !additions.contains(k))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        (additions, diff_fields("stream", &golden, &kept))
+    };
+
+    // 1. The tolerated shape, as the current build really produces it: a key
+    //    the corpus never carried, written VOID.
+    let widened = map_of(vec![field("use_oracle", xdr::ScVal::Void)]);
+    let (additions, ds) = compared(&widened);
+    assert_eq!(
+        additions,
+        vec!["use_oracle".to_string()],
+        "the VOID-valued addition must be recognised as an optional field"
+    );
+    assert!(
+        ds.is_empty(),
+        "an optional addition since the cut is not a layout regression: {ds:?}"
+    );
+    assert_eq!(
+        without_added_keys(&widened, &additions),
+        golden_val,
+        "the byte comparison must run on exactly the release-line key set"
+    );
+
+    // 2. Same position in the map, but the current build writes a real value:
+    //    a field that the release line could not have omitted, i.e. a required
+    //    addition. It has to be reported, not tolerated.
+    let required = map_of(vec![field("min_settlement", xdr::ScVal::Bool(true))]);
+    let (additions, ds) = compared(&required);
+    assert!(additions.is_empty(), "a non-VOID value is not void");
+    assert!(
+        ds.iter()
+            .any(|d| d.contains(".min_settlement:") && d.contains("NOT IN GOLDEN")),
+        "a required field added since the cut must still fail the diff: {ds:?}"
+    );
+
+    // 3. The dangerous look-alike: a field renamed to a name the golden record
+    //    does not carry, whose value the new decoder happens to leave VOID.
+    //    The old name is gone from the wire form, and that is a regression even
+    //    though the new key would otherwise pass the concession.
+    let renamed: Vec<xdr::ScMapEntry> = entries
+        .iter()
+        .filter(|e| e.key != xdr::ScVal::Symbol(xdr::ScSymbol("start_time".try_into().unwrap())))
+        .cloned()
+        .collect();
+    let renamed = {
+        let mut es = renamed;
+        es.push(field("started_at", xdr::ScVal::Void));
+        xdr::ScVal::Map(Some(xdr::ScMap(xdr::VecM::try_from(es).unwrap())))
+    };
+    let (additions, ds) = compared(&renamed);
+    assert_eq!(additions, vec!["started_at".to_string()]);
+    assert!(
+        ds.iter()
+            .any(|d| d.contains(".start_time:")
+                && d.contains("present in golden, MISSING after decode")),
+        "a renamed field must be named by the diff even when its replacement \
+         is the tolerated VOID shape: {ds:?}"
     );
 }

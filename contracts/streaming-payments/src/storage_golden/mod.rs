@@ -38,7 +38,7 @@ use std::vec::Vec;
 use serde::{Deserialize, Serialize};
 use soroban_sdk::xdr::{
     self, ContractDataEntry, LedgerEntry, LedgerEntryData, LedgerKey, LedgerKeyContractData,
-    ReadXdr, WriteXdr,
+    ReadXdr, VecM, WriteXdr,
 };
 use soroban_sdk::{Env, IntoVal, TryFromVal, TryIntoVal, Val};
 pub(crate) mod decode;
@@ -496,4 +496,52 @@ pub(crate) fn diff_fields(
         }
     }
     diffs
+}
+
+// ------------------------------------------------- compatible additions ----
+
+/// A field the current build *adds* on re-encode whose value renders as
+/// `void` is the wire signature of an `Option` field introduced after the
+/// corpus was cut, which is a compatible addition rather than a layout
+/// regression — so `decode` reports it as a note instead of a failure.
+///
+/// The signature is exact, not a guess. The generated decoder unpacks a
+/// struct with `sparse_map_unpack_to_slice(&KEYS, &mut vals)` over a
+/// `VALS = [VOID; N]` initialiser, so a key the release line never wrote
+/// stays VOID on the way in, and the encoder writes every declared field
+/// back out, so that VOID reaches the wire as an explicit entry. VOID is
+/// only ever accepted by `Option<T>`: a *required* field added since the cut
+/// makes the typed decode itself fail (`VOID -> bool` / `-> u64` / … is a
+/// `ConversionError`) long before this filter runs, so nothing that would
+/// actually break an on-ledger read can hide behind it. Renames, removals and
+/// retyped fields keep failing through the strict arms of `diff_fields`.
+pub(crate) fn optional_additions(
+    golden: &BTreeMap<String, String>,
+    got: &BTreeMap<String, String>,
+) -> Vec<String> {
+    got.iter()
+        .filter(|(k, v)| v.as_str() == "void" && !golden.contains_key(*k))
+        .map(|(k, _)| k.clone())
+        .collect()
+}
+
+/// Drop rendered keys from a re-encoded map value so the byte-for-byte
+/// comparison in `decode` runs against the release-line key set. Order among
+/// the surviving entries is untouched, so the check still catches an ordering
+/// or canonicalisation change; non-map values pass through unchanged.
+pub(crate) fn without_added_keys(sc: &xdr::ScVal, keys: &[String]) -> xdr::ScVal {
+    let xdr::ScVal::Map(Some(m)) = sc else {
+        return sc.clone();
+    };
+    let kept: Vec<xdr::ScMapEntry> =
+        m.0.iter()
+            .filter(|e| match &e.key {
+                xdr::ScVal::Symbol(s) => !keys.contains(&s.to_utf8_string_lossy()),
+                _ => true,
+            })
+            .cloned()
+            .collect();
+    xdr::ScVal::Map(Some(xdr::ScMap(
+        VecM::try_from(kept).expect("a subset of a valid map key set is valid"),
+    )))
 }

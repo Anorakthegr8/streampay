@@ -56,6 +56,17 @@ fn status_slot(m: &xdr::ScMap) -> usize {
         .unwrap_or_else(|_| panic!("golden stream map has no `status` field"))
 }
 
+/// The `status` entry, found by key instead of by index. An in-development
+/// build that added a field since the corpus was cut shifts indexes after
+/// its new key, and these assertions are about the status bytes, not about
+/// where in the map they happen to sit.
+fn status_entry(m: &xdr::ScMap) -> &xdr::ScMapEntry {
+    let key = xdr::ScVal::Symbol(xdr::ScSymbol("status".try_into().unwrap()));
+    m.0.iter()
+        .find(|e| e.key == key)
+        .unwrap_or_else(|| panic!("stream map has no `status` field"))
+}
+
 fn replace_status(m: &xdr::ScMap, new_val: xdr::ScVal) -> xdr::ScVal {
     let i = status_slot(m);
     let items: Vec<xdr::ScMapEntry> =
@@ -139,13 +150,13 @@ fn stream_status_wire_forms_are_pinned() {
             unreachable!()
         };
         assert_eq!(
-            m.0[status_slot(&m)].val,
-            mb.0[status_slot(&mb)].val,
+            status_entry(&m).val,
+            status_entry(&mb).val,
             "{}: status bytes changed through a decode/encode cycle",
             meta.file
         );
         assert_eq!(
-            m.0[status_slot(&m)].val,
+            status_entry(&m).val,
             enum_wire(expected),
             "{}: status is not the pinned unit-variant encoding",
             meta.file

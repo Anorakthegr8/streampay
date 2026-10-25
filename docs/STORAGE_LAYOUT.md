@@ -16,11 +16,27 @@ still make already-deployed instances unreadable. The silent ones:
 | Renaming a `#[contracttype]` struct field | field names are written onto the wire as symbols by the symbol-named map encoding; Rust reads by position/name locally | `decode::golden_records_decode_and_roundtrip`, `decode::harness_detects_field_rename_by_construction` |
 | Renaming an enum variant | same: the variant symbol is the encoding | `mid_enum::stream_status_wire_forms_are_pinned`, `mid_enum::intent_status_wire_forms_are_pinned` |
 | Retyping a field (`u64` → `i128`, `bool` → `u32`) | both sides exist in Rust; the blob does not decode | `decode` (typed decode fails, message names the field) |
-| Adding/removing a struct field | the SDK tolerates it locally | `decode` (field diff names the missing/extra key) |
+| Adding/removing a struct field | the SDK tolerates it locally | `decode` (field diff names the missing/extra key; an added `Option` field is the one compatible case — see below) |
 | Mid-enum semantic shift (variant swapped, discriminant reused) | still decodes as the same Rust variant | `mid_enum::semantic_variant_shift_is_caught_even_when_decode_accepts_it` |
 | New storage key, new key enum variant | nothing old breaks; nothing new is pinned | `kind_for_key`'s exhaustive match fails to compile first; then `generate` panics on unknown keys and `decode::golden_manifest_covers_every_persisted_kind` |
 | Event topic/payload layout (`#[topic]` moves a field into the topics) | indexers and off-chain readers break first | `decode::golden_events_roundtrip` |
 | A migration that loses or rewrites data across an upgrade | each build is internally consistent | `replay::upgrade_replay_preserves_every_record` |
+
+**The one change that is *not* a break: a new `Option` field.** The generated
+decoder unpacks a struct over a `VOID`-initialised field slice, so a key the
+release line never wrote arrives as `VOID`, and `Option<T>` is the only field
+form that accepts `VOID`. The encoder writes every declared field back out, so a
+legacy record re-encodes with one extra `VOID`-valued key. `decode` recognises
+exactly that shape (`optional_additions`): the key is reported as
+`COMPATIBLE ADDITION` and the byte-for-byte check runs over the release-line key
+set. It tolerates nothing else — a new *required* field fails the typed decode
+before the concession is reached, and a rename whose replacement happens to be
+`VOID` still reports the vanished old field
+(`decode::compatible_addition_rule_accepts_void_and_nothing_else` proves all
+three arms). `Stream.use_oracle: Option<bool>` is the case this rule exists for:
+the field is a widening of a release-line `bool`, so old records keep their
+meaning (`None` settles against ledger time, like `Some(false)`) and
+`migrate_batch` backfills `Some(false)` on the bounded upgrade path.
 
 **Corpus gap as of this landing.** `DataKey` grew five variants after the corpus
 was cut: `oracle_config`, `oracle_report`, `pending_ownership`,
@@ -72,7 +88,9 @@ byte-for-byte. CI depends on that (see the freshness gate below).
 # The decode + mid_enum + replay tests, as CI runs them:
 STORAGE_GOLDEN_REQUIRE_WASM=1 cargo test -p streampay-contract --lib --locked storage_golden
 
-# Regenerate the corpus (only after the acceptance procedure below):
+# Regenerate the corpus — only from a checkout of the release line you are
+# pinning (see §Accepting a layout change): the generator writes the layout of
+# the build it runs on.
 cargo test -p streampay-contract --lib --locked storage_golden::generate -- --ignored
 ```
 
@@ -98,7 +116,19 @@ variable at job level.
 | --- | --- |
 | `Wasm build (stellar contract build)` | the artifact the replay upgrades to cannot be built (step runs before the tests on purpose) |
 | `Unit + property tests` | any golden record/event no longer decodes, round-trips, or survives the replay, with `STORAGE_GOLDEN_REQUIRE_WASM=1` making a silent skip impossible |
-| `Storage-layout corpus is up to date` | regenerating fixtures changes `test_fixtures/storage/` — i.e. someone edited a blob or the scenario drifted without following the acceptance procedure |
+| `Storage-layout corpus is intact` | a blob the manifest names is not committed, a committed blob has no manifest entry, a blob is empty, or the baseline wasm is missing. It deliberately does **not** regenerate the corpus — see below. |
+
+The removed `corpus is up to date` step ran the generator and diffed
+`test_fixtures/storage/`, which cannot pass. The generator writes the layout of
+**the build it runs on**, while the committed corpus is pinned to the release
+line (v0.3.0). The first layout change after the cut therefore makes the step
+fail because the corpus is *current*, not because anything is wrong — and it
+rewrites the pinned blobs in the workspace, destroying the only artifact whose
+value is that it does not move. The unreviewed-layout-change signal belongs to
+the tests above, and they hold it: `decode` fails the moment a release-line
+record stops decoding (it is what caught the `use_oracle` widening), `mid_enum`
+catches renames and semantic shifts a typed decode cannot see, and `replay`
+proves untouched records survive the upgrade byte-for-byte.
 
 ## Accepting a layout change (the only sanctioned path)
 
@@ -111,8 +141,13 @@ testnet/mainnet hold the old bytes. Never regenerate to make a red test green.
    bump plus a bounded `migrate_storage` path, or an explicit "no deployed
    instance holds this key yet". If neither exists, this is a bug, not a layout
    change.
-3. Run the scenario/generator on a scratch branch:
+3. Run the scenario/generator on a scratch branch **of the release line the
+   corpus pins** (that is how the committed blobs were cut):
    `cargo test -p streampay-contract --lib --locked storage_golden::generate -- --ignored`
+   Running it on the build under review instead produces *that* build's shape
+   and overwrites the release-line records, which is the coverage loss this
+   suite exists to prevent. Use a dev-build run only to read the field diff,
+   and never commit its blobs over the pinned ones.
 4. Review `git diff test_fixtures/storage/manifest.json` field by field. Every
    changed line must be one you predicted; an unrelated key moving means the
    scenario picked up extra state — fix the scenario, not the corpus.
@@ -133,6 +168,10 @@ testnet/mainnet hold the old bytes. Never regenerate to make a red test green.
 - [ ] The diff of `manifest.json` contains only the predicted fields.
 - [ ] Old blobs still decode (`decode::golden_records_decode_and_roundtrip`) or
       their removal is explained — deleting a golden record is a deliberate act.
+- [ ] Every `COMPATIBLE ADDITION:` line the decode tests print is an addition this
+      PR intends, and the PR says how the absent value behaves (backfilled by
+      `migrate_batch`, or inert on reads). A note the author cannot explain is a
+      layout change wearing a compatible costume.
 - [ ] `replay` still proves byte-identical survival for every untouched key.
 - [ ] Two reviewers, one of whom has read `docs/UPGRADES.md`.
 - [ ] The testnet smoke (§ below) was run if the change affects an
