@@ -33,6 +33,9 @@
 //!   [`StreamingPayments::cancel_rate_change`] — two-step renegotiation of the
 //!   streaming rate, rebalancing the deposit at acceptance so neither party can
 //!   change what is owed alone
+//! - [`StreamingPayments::create_stream_with_refund`] /
+//!   [`StreamingPayments::set_refund_target`] — route the refund of the
+//!   unstreamed remainder to an address other than the sender
 //! - [`StreamingPayments::sponsored_withdraw`] — an operator relays a
 //!   recipient’s claim and a sponsor absorbs the gas, guarded by a budget
 //!   ledger and nonce replay protection (see the `sponsor` module docs)
@@ -127,16 +130,18 @@ pub use dispute::{
 };
 pub use errors::StreamError;
 pub use events::{
-    BeneficiaryEnrolled, ContractFrozenStateChanged, ContractUpgraded, DisputeExpired,
-    DisputeRaised, DisputeResolved, FeeCharged, FeeWithdrawn, GovernanceActionExecuted,
-    GovernanceActionProposed, GovernanceActionSigned, GovernanceActionVetoed, GovernanceSignersSet,
-    OperatorKeyRotated, OracleConfigUpdated, OracleStaleFallback, OracleTimeReported,
-    OwnershipAccepted, OwnershipProposed, PolicyAssetExecuted, PolicyAssetQueued,
-    PolicyHandoffAccepted, PolicyHandoffCancelled, PolicyHandoffProposed, PolicyInitialized,
-    RateChangeAccepted, RateChangeProposed, ScheduledIntentCancelled, ScheduledIntentExpired,
-    ScheduledStreamExecuted, SponsorActiveSet, SponsorClaim, SponsorRegistered, StorageMigrated,
-    StreamCancelled, StreamCreated, StreamPolicySet, StreamScheduled, StreamToppedUp,
-    StreamsCreated, UpgradeCancelled, UpgradeProposed, Withdrawn,
+    BatchWithdrawSummary, BeneficiaryEnrolled, ContractFrozenStateChanged, ContractUpgraded,
+    DisputeExpired, DisputeRaised, DisputeResolved, FeeCharged, FeeWithdrawn,
+    GovernanceActionExecuted, GovernanceActionProposed, GovernanceActionSigned,
+    GovernanceActionVetoed, GovernanceSignersSet, OperatorKeyRotated, OracleConfigUpdated,
+    OracleStaleFallback, OracleTimeReported, OwnershipAccepted, OwnershipProposed,
+    PolicyAssetExecuted, PolicyAssetQueued, PolicyHandoffAccepted, PolicyHandoffCancelled,
+    PolicyHandoffProposed, PolicyInitialized, RateChangeAccepted, RateChangeProposed,
+    ScheduledIntentCancelled, ScheduledIntentExpired, ScheduledStreamExecuted,
+    SenderTransferExpired, SenderTransferProposed, SenderTransferred, SponsorActiveSet,
+    SponsorClaim, SponsorRegistered, StorageMigrated, StreamCancelled, StreamCreated,
+    StreamPolicySet, StreamRecordMigrated, StreamRefundTargetChanged, StreamScheduled,
+    StreamToppedUp, StreamsCreated, UpgradeCancelled, UpgradeProposed, Withdrawn,
 };
 pub use governance::{
     GovernanceAction, Proposal, DEFAULT_VETO_WINDOW_SECONDS, MAX_SIGNERS, MIN_VETO_WINDOW_SECONDS,
@@ -152,10 +157,13 @@ pub use sponsor::{PeriodSpend, SponsorConfig};
 // calculators: it is a pure function requiring no `Env`.
 pub use stream::{
     streamed_amount_at_segments, streamed_at, BatchEntry, MigrationStatus, OwnershipRole,
-    PendingOwnership, PendingRateChange, PendingUpgrade, RateSegment, Stream, StreamStatus,
+    PendingOwnership, PendingRateChange, PendingSenderTransfer, PendingUpgrade, RateSegment,
+    SenderHistory, SenderTransferRecord, Stream, StreamStatus, StreamVersionReport,
+    VersionedStream, WithdrawEntry, WithdrawOutcome, CURRENT_STREAM_RECORD_VERSION,
     INITIAL_SCHEMA_VERSION, MAX_BATCH, MAX_DURATION_SECONDS, MAX_MIGRATION_BATCH_SIZE,
-    MAX_PAGE_SIZE, MAX_RATE_SEGMENTS, MIN_BATCH, MIN_UPGRADE_DELAY_SECONDS,
-    OWNERSHIP_PROPOSAL_TTL_SECONDS, RATE_PROPOSAL_TTL_SECONDS, TARGET_SCHEMA_VERSION,
+    MAX_PAGE_SIZE, MAX_RATE_SEGMENTS, MAX_WITHDRAW_BATCH, MIN_BATCH, MIN_UPGRADE_DELAY_SECONDS,
+    OWNERSHIP_PROPOSAL_TTL_SECONDS, RATE_PROPOSAL_TTL_SECONDS, STREAM_RECORD_VERSION_V1,
+    STREAM_RECORD_VERSION_V2, TARGET_SCHEMA_VERSION,
 };
 pub use treasury::{fee_amount, FeeScan, Treasury, TreasuryStatus, BPS_DENOMINATOR, MAX_FEE_BPS};
 
@@ -489,6 +497,221 @@ impl StreamingPayments {
             fee,
             fee_bps,
         )
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Creates a stream whose unstreamed remainder is refundable to `refund_to`"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " rather than to the sender.")]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The refund claim normally travels with the sender role; pinning it at"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " creation is how a payer routes a cancellation back to the account that"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " actually funded the deposit — a treasury behind the signing key, a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " corporate payer whose payroll wallet is ephemeral, or a parent grant that"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " must reclaim what its beneficiary's stream never spent. Accrual, the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " recipient's claims and `cancel_stream`'s authorization are untouched: only"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " the destination of the *remainder* changes, so"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `0 <= withdrawn <= streamed <= deposit` and the conservation invariant are"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " identical to [`StreamingPayments::create_stream`]."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `refund_to` must differ from `sender` — that is already where the claim"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " sits, and refusing the no-op keeps the event log to real routing changes."
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The address is *not* required to exist, hold a balance, or be able to"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " receive: routing to an address that cannot accept the transfer surfaces"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " later as [`StreamError::SenderRefundFailed`] on the cancellation, so this"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " is the sender's own risk to take, and the reason the choice is announced"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " by `StreamRefundTargetChanged` rather than stored silently."
+    )]
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_stream_with_refund(
+        env: Env,
+        sender: Address,
+        recipient: Address,
+        token: Address,
+        deposit_amount: i128,
+        start_time: u64,
+        end_time: u64,
+        cancelable: bool,
+        refund_to: Address,
+    ) -> Result<u64, StreamError> {
+        Self::require_not_frozen(&env)?;
+        if refund_to == sender {
+            return Err(surface::reject(Branch::RefundTargetUnchanged));
+        }
+
+        // The deposit, the escrow and every creation check are the plain
+        // creation path; nothing about routing changes them.
+        let id = Self::create_stream_with_oracle(
+            env.clone(),
+            sender.clone(),
+            recipient,
+            token,
+            deposit_amount,
+            start_time,
+            end_time,
+            cancelable,
+            false,
+        )?;
+
+        // Effects, then the event — same CEI shape as the amendment path. No
+        // token moves here: the deposit is already escrowed in the contract.
+        stream::put_refund_target(&env, id, &refund_to);
+
+        #[cfg(test)]
+        cei_trace::record("event StreamRefundTargetChanged");
+        StreamRefundTargetChanged {
+            stream_id: id,
+            previous_target: sender,
+            new_target: refund_to,
+            at_creation: true,
+        }
+        .publish(&env);
+
+        Ok(id)
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Re-routes the refund of a stream's unstreamed remainder to `refund_to`."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Only the current sender may call this, and only while the stream is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `Active`: the claim is the counterpart of the money that funded the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " stream, so nobody else gets to redirect it, and once the stream is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " cancelled or depleted there is no remainder left to route."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Routing to the sender's own address is the way to *undo* a previous"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " routing (or to make a routed claim follow the role again), and is a real"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " change whenever the pinned target differs from the current sender — see"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamingPayments::refund_target`]."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The claim is deliberately *not* re-derived from the role on every hop: a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " consented sender transfer keeps whatever routing was in force, which is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " why [`StreamingPayments::propose_sender_transfer`] carries an explicit"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `transfer_refund_rights` flag instead of implying one here. A top-up by a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " later sender therefore enlarges the pot that the *pinned* target reclaims"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " — route with intent.")]
+    pub fn set_refund_target(
+        env: Env,
+        caller: Address,
+        stream_id: u64,
+        refund_to: Address,
+    ) -> Result<(), StreamError> {
+        Self::require_not_frozen(&env)?;
+        caller.require_auth();
+
+        let s = stream::get_stream(&env, stream_id)?;
+        if s.status != StreamStatus::Active {
+            return Err(surface::reject(Branch::StreamNotActive));
+        }
+        if caller != s.sender {
+            return Err(surface::reject(Branch::RefundTargetNotSender));
+        }
+        let previous = stream::refund_target(&env, &s);
+        if previous == refund_to {
+            return Err(surface::reject(Branch::RefundTargetUnchanged));
+        }
+
+        stream::put_refund_target(&env, stream_id, &refund_to);
+
+        #[cfg(test)]
+        cei_trace::record("event StreamRefundTargetChanged");
+        StreamRefundTargetChanged {
+            stream_id,
+            previous_target: previous,
+            new_target: refund_to,
+            at_creation: false,
+        }
+        .publish(&env);
+
+        Ok(())
     }
 
     fn validate_stream_creation(
@@ -1042,25 +1265,258 @@ impl StreamingPayments {
     pub fn withdraw_max(env: Env, stream_id: u64) -> Result<i128, StreamError> {
         Self::require_not_frozen(&env)?;
         let mut s = Self::authorize_withdrawal(&env, stream_id)?;
-
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
-        let amount = stream::available_amount_with_plan(&env, &s, resolved.timestamp)?;
-        if amount <= 0 {
-            return Err(surface::reject(Branch::WithdrawMaxNothingToWithdraw));
-        }
-
-        Self::pay_out(&env, &mut s, amount)?;
-        Ok(amount)
+        Self::settle_accrued(&env, stream_id, &mut s)
     }
 
     #[cfg_attr(
         not(target_family = "wasm"),
-        doc = " Shared preamble for both withdrawal paths: load the stream, require"
+        doc = " Claims the entire accrued balance of up to [`MAX_WITHDRAW_BATCH`] streams"
     )]
     #[cfg_attr(
         not(target_family = "wasm"),
-        doc = " the recipient's authorization, and reject terminal streams."
+        doc = " in one transaction, through the exact single-stream claim path."
     )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Every entry runs [`Self::settle_accrued`] — the same function"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `withdraw_max` uses — so the batch inherits the CEI ordering, accrual"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " math, TTL extension and per-stream [`Withdrawn`] event of the audited"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " single path instead of restating any of it. One authorization covers the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " batch: the caller must be the recipient of *every* stream listed, so a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " holder can never claim a counterparty's stream by adding its id"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " (rejected per-entry with [`StreamError::NotAuthorized`])."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " **Per-entry isolation.** A stream that fails a pre-payout check — not"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " found, not yours, not active, nothing accrued, overflow — comes back as a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`WithdrawEntry`] carrying that error's code and `amount: 0`, and is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " *skipped*: its siblings still pay out. Payout failures are the deliberate"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " exception:")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamError::RecipientPayoutFailed`] aborts the whole call, because"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " the effects of a claim (the `withdrawn` update, the `Withdrawn` event)"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " are written *before* the token interaction, as CEI requires, and a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " published event cannot be un-published. Skipping a failed payout would"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " therefore mean un-writing state after an external call — the exact"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " reentrancy hazard the ordering exists to prevent. Aborting instead lets"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " the host roll the transaction back as if it never ran."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " **`strict`.** `false` (the default behaviour) keeps partial success: the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " call settles what it can and reports the rest. `true` turns any"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " per-entry rejection into a revert of the whole call, returning that"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " error, so an all-or-nothing claim either settles every stream or none."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The call reverts before reading any state when `stream_ids` is empty"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " ([`StreamError::WithdrawBatchEmpty`]), longer than"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`MAX_WITHDRAW_BATCH`] ([`StreamError::WithdrawBatchTooLarge`]), or"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " contains a repeated id ([`StreamError::WithdrawDuplicateStreamIds`]) —"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " a duplicate would otherwise claim against state its first occurrence has"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " already rewritten.")]
+    pub fn withdraw_many(
+        env: Env,
+        recipient: Address,
+        stream_ids: Vec<u64>,
+        strict: bool,
+    ) -> Result<Vec<WithdrawEntry>, StreamError> {
+        let count = stream_ids.len();
+        if count == 0 {
+            return Err(surface::reject(Branch::WithdrawManyEmpty));
+        }
+        if count > stream::MAX_WITHDRAW_BATCH {
+            return Err(surface::reject(Branch::WithdrawManyTooLarge));
+        }
+        let mut seen = Vec::new(&env);
+        for id in stream_ids.iter() {
+            if seen.contains(id) {
+                return Err(surface::reject(Branch::WithdrawManyDuplicateIds));
+            }
+            seen.push_back(id);
+        }
+
+        Self::require_not_frozen(&env)?;
+        recipient.require_auth();
+
+        let mut entries = Vec::new(&env);
+        let mut paid = Vec::new(&env);
+        let mut total: i128 = 0;
+        let mut skipped: u32 = 0;
+        for id in stream_ids.iter() {
+            let result = Self::authorize_batch_withdrawal(&env, id, &recipient)
+                .and_then(|mut s| Self::settle_accrued(&env, id, &mut s));
+            if strict {
+                // Any per-entry rejection aborts the batch, so the entries that
+                // already settled are rolled back with it.
+                if let Err(error) = &result {
+                    return Err(*error);
+                }
+            } else if result == Err(StreamError::RecipientPayoutFailed) {
+                // The one error that cannot be reported per entry. This entry's
+                // effects — the `withdrawn` update and the `Withdrawn` event —
+                // were written before the token was called, as CEI requires,
+                // and neither can be un-written nor un-published for a single
+                // entry. Reporting it as a skip would leave the ledger claiming
+                // that money left when nothing moved, so the whole call
+                // reverts and the host discards every entry's effects instead.
+                return Err(StreamError::RecipientPayoutFailed);
+            }
+            let entry = match result {
+                Ok(amount) => {
+                    total = total
+                        .checked_add(amount)
+                        .ok_or_else(|| surface::reject(Branch::WithdrawManyTotalOverflow))?;
+                    paid.push_back(WithdrawOutcome {
+                        stream_id: id,
+                        amount,
+                    });
+                    WithdrawEntry {
+                        stream_id: id,
+                        amount,
+                        code: 0,
+                    }
+                }
+                Err(error) => {
+                    skipped += 1;
+                    WithdrawEntry {
+                        stream_id: id,
+                        amount: 0,
+                        code: error.code(),
+                    }
+                }
+            };
+            entries.push_back(entry);
+        }
+
+        #[cfg(test)]
+        cei_trace::record("event BatchWithdrawSummary");
+        BatchWithdrawSummary {
+            settled: paid.clone(),
+            total,
+            requested: count,
+            skipped,
+            recipient,
+        }
+        .publish(&env);
+
+        Ok(entries)
+    }
+
+    /// Shared claim tail for `withdraw_max` and every `withdraw_many` entry:
+    /// resolve the stream's clock, take the whole accrued-but-unwithdrawn
+    /// balance, and pay it out. Takes the already-authorized stream so the two
+    /// entrypoints differ only in how they authorize.
+    fn settle_accrued(env: &Env, stream_id: u64, s: &mut Stream) -> Result<i128, StreamError> {
+        let resolved = oracle::resolve_stream_time(env, stream_id, s.uses_oracle());
+        let amount = stream::available_amount_with_plan(env, s, resolved.timestamp)?;
+        if amount <= 0 {
+            return Err(surface::reject(Branch::WithdrawMaxNothingToWithdraw));
+        }
+
+        Self::pay_out(env, s, amount)?;
+        Ok(amount)
+    }
+
+    /// Batch-mode authorization: the stream must exist, belong to the batch
+    /// caller, and be active.
+    ///
+    /// The identity check runs *before* any authorization is required, because
+    /// a `require_auth` failure for a stranger's recipient aborts the whole
+    /// transaction rather than producing a per-entry error — the batch could
+    /// not report the offending entry if it got that far.
+    fn authorize_batch_withdrawal(
+        env: &Env,
+        stream_id: u64,
+        recipient: &Address,
+    ) -> Result<Stream, StreamError> {
+        let s = stream::get_stream(env, stream_id)?;
+        if &s.recipient != recipient {
+            return Err(surface::reject(Branch::WithdrawManyNotStreamRecipient));
+        }
+        if s.status != StreamStatus::Active {
+            return Err(surface::reject(Branch::StreamNotActive));
+        }
+        Ok(s)
+    }
+
+    /// Shared preamble for both withdrawal paths: load the stream, require
+    /// the recipient's authorization, and reject terminal streams.
     fn authorize_withdrawal(env: &Env, stream_id: u64) -> Result<Stream, StreamError> {
         let s = stream::get_stream(env, stream_id)?;
         s.recipient.require_auth();
@@ -1111,41 +1567,6 @@ impl StreamingPayments {
         )
     }
 
-    /// Cancels a stream: pays the recipient their accrued-but-unwithdrawn
-    /// balance and refunds the sender the unaccrued remainder, atomically.
-    ///
-    /// Callable by the sender always, and by the recipient only if the stream
-    /// was created with `cancelable = true`. Cancelling an already-cancelled
-    /// or depleted stream reverts with [`StreamError::StreamNotActive`];
-    /// cancelling while a dispute is open reverts with
-    /// [`StreamError::DisputeActive`] until the dispute is resolved or expires.
-    /// or depleted stream reverts with [`StreamError::StreamNotActive`].
-    ///
-    /// Each payout leg maps a token-side failure to its own code —
-    /// [`StreamError::RecipientPayoutFailed`] for the recipient's accrued
-    /// share and [`StreamError::SenderRefundFailed`] for the sender's refund —
-    /// and any failure rolls the whole cancellation back: the stream stays
-    /// `Active`, `withdrawn` is restored, and no event survives.
-    ///
-    /// # Ordering against `withdraw` (same-ledger race)
-    ///
-    /// The counterpart of the ordering documented on
-    /// [`StreamingPayments::withdraw`]: cancellation is atomic and sees the
-    /// `withdrawn` balance as of *its* execution point.
-    ///
-    /// * If the recipient's `withdraw` executes first, the cancel splits the
-    ///   remainder only (`streamed − withdrawn` to the recipient,
-    ///   `deposit − streamed` to the sender). If that withdrawal already
-    ///   drained the stream to `Depleted`, the cancel reverts with
-    ///   [`StreamError::StreamNotActive`] (code 5).
-    /// * If this cancel executes first, the stream is `Cancelled` and any
-    ///   later `withdraw` / `withdraw_max` reverts with
-    ///   [`StreamError::StreamNotActive`] (code 5).
-    ///
-    /// Last write wins in execution order; no interleaving exists within a
-    /// ledger, and the losing call leaves state and balances untouched.
-    /// Pinned by the `race_*` regression tests in `test.rs`; see
-    /// `docs/ARCHITECTURE.md` §6.1 for the race table.
     #[cfg_attr(
         not(target_family = "wasm"),
         doc = " Cancels a stream: pays the recipient their accrued-but-unwithdrawn"
@@ -1280,6 +1701,10 @@ impl StreamingPayments {
         let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
         let (recipient_amount, sender_amount) =
             stream::cancel_amounts_with_plan(&env, &s, resolved.timestamp)?;
+        // Resolved before the state write: the refund belongs to the claim that
+        // backed the deposit, which only stays the same as `s.sender` until a
+        // consented transfer or an amendment says otherwise.
+        let refund_to = stream::refund_target(&env, &s);
 
         // Effects first (CEI): finalise state before moving tokens.
         s.status = StreamStatus::Cancelled;
@@ -1321,7 +1746,7 @@ impl StreamingPayments {
                     &env,
                     &s.token,
                     &current_contract,
-                    &stream::muxed(&s.sender),
+                    &stream::muxed(&refund_to),
                     sender_amount,
                     Branch::SenderRefundFailed,
                 )?;
@@ -1331,22 +1756,6 @@ impl StreamingPayments {
         Ok(())
     }
 
-    /// Adds funds to an existing active stream. The deposit grows and accrual
-    /// remains linear over the original window, so the recipient's accrued
-    /// amount increases pro-rata immediately (Sablier-v1 `increaseAmount`
-    /// semantics).
-    ///
-    /// Top-ups are rejected on cancelled or depleted streams, and frozen
-    /// ([`StreamError::DisputeActive`]) while a dispute is open. Topping up a
-    /// stream that has already passed `end_time` adds fully-accrued funds the
-    /// recipient can withdraw immediately.
-    ///
-    /// A token-side failure to pull the funds returns
-    /// [`StreamError::TopUpTransferFailed`] and leaves `deposit` unchanged.
-    ///
-    /// Note: extending `end_time` is intentionally not supported in v1 —
-    /// retroactively re-baselining accrual is lossy for the recipient; see
-    /// `docs/ARCHITECTURE.md` for the design considerations and roadmap.
     #[cfg_attr(
         not(target_family = "wasm"),
         doc = " Adds funds to an existing active stream. The deposit grows and accrual"
@@ -2013,8 +2422,315 @@ impl StreamingPayments {
 
     #[cfg_attr(
         not(target_family = "wasm"),
-        doc = " Resolves which role `caller` currently holds on `s`."
+        doc = " Proposes handing the **sender** role of a stream to a new address."
     )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Only the current sender may propose, and the proposal does not move the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " role: a sender transfer changes who pays the recipient and who can"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " cancel the stream, so it is the *recipient's* decision to take. The"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " proposal therefore waits for [`StreamingPayments::accept_sender_transfer`]"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " from the recipient, inside `OWNERSHIP_PROPOSAL_TTL_SECONDS`."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `nonce` is the caller's freshness marker. It is stored with the proposal,"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " echoed by the proposal's events and must be repeated exactly by the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " consent, so a consent can never land on a proposal that was replaced in"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " the meantime.")]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `transfer_refund_rights` decides, up front, what the recipient is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " consenting to: with `false` (the default meaning auditors expect) the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " deposit's refund claim stays with the original sender, and only the role"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " moves; with `true` the claim moves to `new_sender` as well. Refund rights"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " are never implied by a role change — the flag is the whole mechanism."
+    )]
+    pub fn propose_sender_transfer(
+        env: Env,
+        caller: Address,
+        stream_id: u64,
+        new_sender: Address,
+        nonce: u64,
+        transfer_refund_rights: bool,
+    ) -> Result<(), StreamError> {
+        Self::require_not_frozen(&env)?;
+        caller.require_auth();
+
+        let s = stream::get_stream(&env, stream_id)?;
+        if s.status != StreamStatus::Active {
+            return Err(surface::reject(Branch::StreamNotActive));
+        }
+        if caller != s.sender {
+            return Err(surface::reject(Branch::ProposeNotAuthorized));
+        }
+        // The recipient stays who they are; handing the payer role to the
+        // recipient would collapse both roles onto one address.
+        if new_sender == s.sender || new_sender == s.recipient {
+            return Err(surface::reject(Branch::ProposeInvalidTarget));
+        }
+
+        let now = env.ledger().timestamp();
+        if let Some(existing) = stream::get_pending_sender_transfer(&env, stream_id) {
+            if now < existing.expires_at {
+                return Err(surface::reject(Branch::SenderTransferPending));
+            }
+            // A proposal that aged out is replaced here rather than requiring a
+            // separate cleanup call; `expire_sender_transfer` exists for anyone
+            // who wants the reclaim (and its event) on its own.
+            stream::remove_pending_sender_transfer(&env, stream_id);
+        }
+
+        let pending = PendingSenderTransfer {
+            stream_id,
+            sender_from: caller.clone(),
+            new_sender: new_sender.clone(),
+            nonce,
+            expires_at: now.saturating_add(OWNERSHIP_PROPOSAL_TTL_SECONDS),
+            transfer_refund_rights,
+        };
+        stream::put_pending_sender_transfer(&env, &pending);
+
+        #[cfg(test)]
+        cei_trace::record("event SenderTransferProposed");
+        SenderTransferProposed {
+            stream_id,
+            sender_from: caller,
+            new_sender,
+            nonce,
+            expires_at: pending.expires_at,
+            transfer_refund_rights,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Executes a proposed sender transfer on the recipient's consent."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The caller must be the stream's **recipient** — the party whose"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " counterparty changes — and must present the proposal's nonce. On success"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " the role moves, the sender discovery indexes are re-pointed for both"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " sides, and the hop is appended to the stream's immutable sender log."
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `deposit`, `withdrawn`, the time window and the token are untouched, so"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " accrual and the `0 <= withdrawn <= streamed <= deposit` invariant are"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " unchanged.")]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " An elapsed window is [`StreamError::SenderTransferExpired`], never a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " silent no-op; the stale entry is then reclaimed with"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamingPayments::expire_sender_transfer`]."
+    )]
+    pub fn accept_sender_transfer(
+        env: Env,
+        caller: Address,
+        stream_id: u64,
+        nonce: u64,
+    ) -> Result<(), StreamError> {
+        Self::require_not_frozen(&env)?;
+        caller.require_auth();
+
+        let pending = stream::get_pending_sender_transfer(&env, stream_id)
+            .ok_or_else(|| surface::reject(Branch::SenderTransferNotFound))?;
+        let s = stream::get_stream(&env, stream_id)?;
+        if s.status != StreamStatus::Active {
+            return Err(surface::reject(Branch::StreamNotActive));
+        }
+        if caller != s.recipient {
+            return Err(surface::reject(Branch::SenderTransferNotConsenter));
+        }
+        if nonce != pending.nonce {
+            return Err(surface::reject(Branch::SenderTransferNonceMismatch));
+        }
+        if env.ledger().timestamp() >= pending.expires_at {
+            return Err(surface::reject(Branch::SenderTransferExpired));
+        }
+
+        // Effects (CEI): state first, then the event. No tokens move — this
+        // entrypoint changes roles only.
+        stream::apply_sender_transfer(&env, &s, &pending)?;
+        stream::remove_pending_sender_transfer(&env, stream_id);
+
+        #[cfg(test)]
+        cei_trace::record("event SenderTransferred");
+        SenderTransferred {
+            stream_id,
+            sender_from: pending.sender_from,
+            sender_to: pending.new_sender.clone(),
+            nonce,
+            refund_rights_transferred: pending.transfer_refund_rights,
+        }
+        .publish(&env);
+
+        Ok(())
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Reclaims a sender-transfer proposal whose acceptance window has elapsed."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Permissionless like the version-migration path: nothing about removing a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " dead proposal can move funds or change an accounting field, so any keeper"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " may pay the gas to free the storage. Returns the reclaimed nonce so the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " caller can confirm which proposal they removed."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Refuses while the proposal is still live ([`StreamError::"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " SenderTransferNotExpired`]) — the window, not a third party, is what ends"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " a recipient's option to consent — and with [`StreamError::"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " SenderTransferNotFound`] when there is nothing to reclaim."
+    )]
+    pub fn expire_sender_transfer(env: Env, stream_id: u64) -> Result<u64, StreamError> {
+        Self::require_not_frozen(&env)?;
+
+        let pending = stream::get_pending_sender_transfer(&env, stream_id)
+            .ok_or_else(|| surface::reject(Branch::SenderTransferNotFound))?;
+        if env.ledger().timestamp() < pending.expires_at {
+            return Err(surface::reject(Branch::SenderTransferNotExpired));
+        }
+        stream::remove_pending_sender_transfer(&env, stream_id);
+
+        #[cfg(test)]
+        cei_trace::record("event SenderTransferExpired");
+        SenderTransferExpired {
+            stream_id,
+            sender_from: pending.sender_from.clone(),
+            new_sender: pending.new_sender.clone(),
+            nonce: pending.nonce,
+        }
+        .publish(&env);
+
+        Ok(pending.nonce)
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Read-only view of a stream's pending sender transfer, if any."
+    )]
+    pub fn pending_sender_transfer(env: Env, stream_id: u64) -> Option<PendingSenderTransfer> {
+        stream::get_pending_sender_transfer(&env, stream_id)
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The append-only sender-role log of a stream: who held the payer role at"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " creation and every consented hop since. Never rewritten, so the answer to"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " \"who funded this deposit?\" survives any number of transfers."
+    )]
+    pub fn sender_history(env: Env, stream_id: u64) -> Result<SenderHistory, StreamError> {
+        let s = stream::get_stream(&env, stream_id)?;
+        Ok(stream::sender_history(&env, &s))
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The address that receives the refund of the unstreamed remainder when the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " stream is cancelled. Equal to the current sender unless a sender transfer"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " left the claim behind (or an amendment moved it on purpose)."
+    )]
+    pub fn refund_target(env: Env, stream_id: u64) -> Result<Address, StreamError> {
+        let s = stream::get_stream(&env, stream_id)?;
+        Ok(stream::refund_target(&env, &s))
+    }
+
+    /// Resolves which role `caller` currently holds on `s`.
     fn role_of(s: &Stream, caller: &Address) -> Result<OwnershipRole, StreamError> {
         if caller == &s.sender {
             Ok(OwnershipRole::Sender)
@@ -4017,6 +4733,131 @@ impl StreamingPayments {
             total_streams: total,
             is_complete,
         }
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The storage layout version of a single stream record."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `1` is the legacy untagged layout (a bare `Stream` map), `2` the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " version-tagged [`VersionedStream`] every current write produces. Auditors"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " use this to answer \"what still needs moving?\" per stream without"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " decoding the record itself; see `scripts/migrate_audit.ts` for the"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " off-chain walk.")]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Fails closed with [`StreamError::SchemaVersionUnsupported`] for a record"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " tagged with a layout this build does not understand, and with"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamError::StreamNotFound`] when no record exists."
+    )]
+    pub fn stream_record_version(env: Env, stream_id: u64) -> Result<u32, StreamError> {
+        stream::stream_record_version(&env, stream_id)
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Re-encodes one stream record under [`CURRENT_STREAM_RECORD_VERSION`]."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " **Idempotent: running it twice is a no-op.** A record that already"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " carries the current layout is reported with `migrated == false` and is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " not rewritten, so it emits no event and changes no storage byte. Repeat"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " calls are safe from any number of keepers racing on the same stream."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " **Permissionless**: unlike the governor-driven [`StreamingPayments::"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " migrate_storage`] batch, anyone may migrate a single record — it moves"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " no funds and touches no accounting field, only the encoding of a stream"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " whose decoded state is provably unchanged. It is also gas-bounded by"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " construction: exactly one stream record is read and (at most) one"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " rewritten per call, so callers never pay for somebody else's backlog."
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = "")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Returns [`StreamError::StreamNotFound`] for an unknown id and"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamError::SchemaVersionUnsupported`] for a record this build cannot"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " decode (there is nothing to re-encode *from*, so refusing is the only"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " safe answer). Migration is refused while the contract is frozen, like"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " every other state-mutating entrypoint."
+    )]
+    pub fn migrate_stream_version(
+        env: Env,
+        stream_id: u64,
+    ) -> Result<StreamVersionReport, StreamError> {
+        Self::require_not_frozen(&env)?;
+        let report = stream::migrate_stream_record(&env, stream_id)?;
+        if report.migrated {
+            #[cfg(test)]
+            cei_trace::record("event StreamRecordMigrated");
+            StreamRecordMigrated {
+                stream_id,
+                from_version: report.from_version,
+                to_version: report.to_version,
+            }
+            .publish(&env);
+        }
+        Ok(report)
     }
 
     // ----------------------------------------------------------- oracle ----

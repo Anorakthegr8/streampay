@@ -23,8 +23,8 @@ jobs:
       STORAGE_GOLDEN_REQUIRE_WASM: 1
       # Single source of truth for the Wasm size budget (KB). The rule is:
       # the smallest whole KB that the current public interface fits, so the
-      # ratchet stays as tight as the interface allows. 90 KB = this build's
-      # 91,534 B + 2,606 B of headroom. History: issue #58's techniques took the
+      # ratchet stays as tight as the interface allows. 100 KB = this build's
+      # 101,691 B + 709 B of headroom. History: issue #58's techniques took the
       # contract from 91,004 B to 60,386 B, upstream's ownership-transfer +
       # vault surface added 3,757 B (gate: 63 KB), and the governance timelock
       # that has now merged adds 14,123 B more — 10,005 B of `code`, 3,072 B of
@@ -41,9 +41,18 @@ jobs:
       # accrual helpers), 1,512 B of structural `contractspecv0` entries (5
       # entrypoints, 2 events, 2 stored structs, 4 error codes), 537 B of `data`
       # event symbols, 107 B of exports and 29 B of meta. Merged together the two
-      # feature branches produce 91,534 B (89.4 KB → 90 KB gate). The next
-      # entrypoint addition should trigger the split discussion, not a bump.
-      WASM_SIZE_BUDGET_KB: 90
+      # feature branches produce 91,534 B (89.4 KB → 90 KB gate). #426 is the
+      # entrypoint addition that comment predicted: 15 new entrypoints (sender
+      # transfer, ownership transfer, refund routing, `withdraw_many`, schema
+      # migration), 6 new events, 12 new error codes (87-98) and 3 new `DataKey`
+      # variants, no new dependencies, measured 101,691 B with the pinned
+      # stellar-cli 28.1.0 — +10,157 B, ~680 B per entrypoint, and
+      # `gate_interface_docs.py --check` reports 0 groups on that tree, so no
+      # Technique 1 recovery is left. The gate moves to 100 KB and the split
+      # discussion is now overdue rather than merely triggered: see
+      # docs/WASM_SIZE.md ("Gate decision — #426"). The next interface addition
+      # should split the contract, not raise this number again.
+      WASM_SIZE_BUDGET_KB: 100
     steps:
       - uses: actions/checkout@v7
 
@@ -517,6 +526,14 @@ jobs:
       # SECURITY.md, the runbooks, and the audit docs form intact.
       - name: Check internal markdown links
         run: node scripts/check_docs_links.mjs
+
+      # The migration plan operators read (docs/MIGRATION_AUDIT.md) is generated
+      # from a captured record-layout snapshot, so changing the classifier or the
+      # snapshot without regenerating the report is drift. Regenerate and diff,
+      # with the same one command contributors run locally. Needs no npm install:
+      # the layout classifier is dependency-free by design.
+      - name: Migration audit report is up to date
+        run: bash scripts/migrate_audit.sh --check
 
       # A JSON file with the same key twice is valid JSON: `JSON.parse` and npm
       # keep the LAST occurrence and drop the earlier one without a word. Every
