@@ -11,6 +11,7 @@
 //! tolerance reaches no further than that exact shape.
 
 use std::collections::BTreeMap;
+use std::eprintln;
 use std::format;
 use std::panic;
 use std::string::{String, ToString};
