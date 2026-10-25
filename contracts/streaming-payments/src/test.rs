@@ -7263,7 +7263,7 @@ fn empty_plan_matches_single_window_formula() {
                 end_time: start + duration,
                 cancelable: false,
                 status: StreamStatus::Active,
-                use_oracle: false,
+                use_oracle: Some(false),
             };
             for offset in [0u64, 1, duration / 2, duration - 1, duration, duration + 1] {
                 let now = start + offset;
@@ -8078,7 +8078,7 @@ fn price_random_schedules(trials_count: usize) -> usize {
                 end_time,
                 cancelable: false,
                 status: StreamStatus::Active,
-                use_oracle: false,
+                use_oracle: Some(false),
             };
 
             // Ascending probes, so the monotonicity assertion has an ordering
@@ -8158,4 +8158,136 @@ fn piecewise_accrual_matches_the_reference_models() {
 fn piecewise_accrual_rounding_analysis_over_a_million_schedules() {
     let windows = price_random_schedules(1_000_000);
     std::println!("ROUNDING ANALYSIS: 1_000_000 segment sets, {windows} windows priced, 0 diffs");
+}
+
+// -------------------------------------------- release-line storage reads ----
+
+/// The struct-field symbol the SDK keys a `Stream` record by for the oracle
+/// flag — a map key, not a Rust name, on the wire.
+fn oracle_key() -> soroban_sdk::xdr::ScVal {
+    soroban_sdk::xdr::ScVal::Symbol(soroban_sdk::xdr::ScSymbol("use_oracle".try_into().unwrap()))
+}
+
+/// The `Stream` record as an already-deployed instance wrote it: this build's
+/// own encoding of `s` with the `use_oracle` key removed. Derived by
+/// subtraction rather than written out field by field, so it stays the
+/// pre-oracle shape even as the rest of the struct moves.
+fn pre_oracle_stream_record(env: &Env, s: &Stream) -> soroban_sdk::xdr::ScVal {
+    use soroban_sdk::xdr::{self, VecM};
+    use soroban_sdk::{TryFromVal, TryIntoVal, Val};
+
+    let val: Val = s.try_into_val(env).expect("encode stream");
+    let written = xdr::ScVal::try_from_val(env, &val).expect("stream scval");
+    let map = match written {
+        xdr::ScVal::Map(Some(ref m)) => m.clone(),
+        other => panic!("a stream is not encoded as a map: {other:?}"),
+    };
+    let entries: Vec<xdr::ScMapEntry> = map
+        .0
+        .iter()
+        .filter(|e| e.key != oracle_key())
+        .cloned()
+        .collect();
+    assert_eq!(
+        map.0.len() - entries.len(),
+        1,
+        "the current encoding must carry exactly one `use_oracle` key to drop"
+    );
+    xdr::ScVal::Map(Some(xdr::ScMap(
+        VecM::try_from(entries).expect("pre-oracle map"),
+    )))
+}
+
+/// `use_oracle` was added to the persisted `Stream` struct as a required field,
+/// which made every record written before it existed undecodable: a struct
+/// field Rust requires and the wire does not carry is a conversion error, so
+/// `get_stream` failed on pre-oracle streams and the migration that was meant
+/// to fix them read those same records through the failing typed door. The
+/// field is now `Option<bool>`. This pins the reads that fix restores, at both
+/// decode doors a storage hit goes through, and pins that migration backfills
+/// the key rather than leaving it absent.
+#[test]
+fn pre_oracle_stream_records_decode_and_migrate() {
+    use crate::stream::{self as store, DataKey};
+    use soroban_sdk::xdr::ScVal;
+    use soroban_sdk::{TryFromVal, TryIntoVal, Val};
+
+    let f = Fixture::setup();
+    let id = f.create_stream(DEPOSIT, DAY, 30 * DAY, true);
+    let current = f.client.get_stream(&id);
+    assert_eq!(current.use_oracle, Some(false));
+
+    // A record this build writes carries the flag as a bool, never a void: the
+    // stored layout of new streams is unchanged by the widening to `Option`.
+    let current_val: Val = (&current).try_into_val(&f.env).expect("encode stream");
+    let written = ScVal::try_from_val(&f.env, &current_val).expect("stream scval");
+    let map = match &written {
+        ScVal::Map(Some(m)) => m.clone(),
+        other => panic!("a stream is not encoded as a map: {other:?}"),
+    };
+    let flag = map
+        .0
+        .iter()
+        .find(|e| e.key == oracle_key())
+        .expect("`use_oracle` key on a newly written record");
+    assert_eq!(flag.val, ScVal::Bool(false));
+
+    let legacy = pre_oracle_stream_record(&f.env, &current);
+
+    // Door 1: raw XDR, the one the storage-layout corpus is decoded through.
+    let from_xdr = Stream::try_from_val(&f.env, &legacy)
+        .expect("a pre-oracle record must decode with the current types");
+    assert_eq!(from_xdr.use_oracle, None);
+    assert!(!from_xdr.uses_oracle());
+    assert_eq!(
+        from_xdr,
+        Stream {
+            use_oracle: None,
+            ..current.clone()
+        },
+        "only the oracle flag may differ from the record it was built from"
+    );
+
+    // Door 2: host `Val`, the one a typed storage read goes through.
+    let legacy_val = Val::try_from_val(&f.env, &legacy).expect("pre-oracle record as Val");
+    let from_val = Stream::try_from_val(&f.env, &legacy_val)
+        .expect("a pre-oracle record must decode from a host map object");
+    assert_eq!(from_val, from_xdr);
+
+    // The contract's own read path over that record, before any migration.
+    let key = DataKey::Stream(id);
+    f.env.as_contract(&f.client.address, || {
+        f.env.storage().persistent().set(&key, &legacy_val);
+        let s = store::get_stream(&f.env, id).expect("typed get on a pre-oracle record");
+        assert_eq!(s.use_oracle, None);
+        assert_eq!(s.deposit, DEPOSIT);
+        store::set_schema_version(&f.env, INITIAL_SCHEMA_VERSION);
+    });
+
+    // Migration backfills the key, so the record leaves the v1 shape on-chain
+    // and reads as an explicit flag afterwards.
+    f.client.mock_all_auths().set_frozen(&f.governor, &true);
+    let status = f
+        .client
+        .mock_all_auths()
+        .migrate_storage(&f.governor, &id, &1);
+    assert!(status.is_complete);
+    assert_eq!(f.client.schema_version(), TARGET_SCHEMA_VERSION);
+
+    f.env.as_contract(&f.client.address, || {
+        let s = store::get_stream(&f.env, id).expect("typed get after migration");
+        assert_eq!(
+            s.use_oracle,
+            Some(false),
+            "migration writes the flag it backfilled"
+        );
+        assert_eq!(
+            s,
+            Stream {
+                use_oracle: Some(false),
+                ..current.clone()
+            },
+            "backfilling the flag must not disturb the accounting fields"
+        );
+    });
 }
