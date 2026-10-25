@@ -1231,7 +1231,7 @@ StreamPay supports an optional external oracle reference clock (`create_stream_w
 
 ### Trust & Threat Model
 
-- **Opt-In Per Stream**: Ledger time remains the default clock. Oracle resolution is strictly opt-in per stream (`use_oracle: bool`), preventing unexpected feed dependency for standard streams.
+- **Opt-In Per Stream**: Ledger time remains the default clock. Oracle resolution is strictly opt-in per stream (`use_oracle` flag on the persisted `Stream`), preventing unexpected feed dependency for standard streams. Streams written before the oracle clock existed carry no `use_oracle` key on the wire at all; the field is optional in Rust so those records keep decoding, and an absent flag reads as ledger time. The v1→v2 storage migration backfills the key to `false`.
 - **Governor-Managed Publisher Registry**: The protocol governor configures authorized publishers and threshold requirements (`set_oracle_config`).
 - **M-of-N Quorum Protection**: An M-of-N quorum scheme (e.g. 2-of-3) prevents any single compromised or rogue publisher from shifting reference time. Quorum aggregation uses the median of valid publisher reports, which eliminates outliers.
 - **Staleness Bounds (`max_stale_seconds`)**: Each publisher submission records `(reported_time, ledger_time)`. A report is deemed valid if and only if `current_ledger_time <= report.ledger_time + max_stale_seconds`. Older reports are automatically discarded. Future timestamps exceeding `current_ledger_time + max_stale_seconds` are rejected on submission (`StreamError::OracleReportTooOld`).

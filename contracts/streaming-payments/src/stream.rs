@@ -550,7 +550,23 @@ pub struct Stream {
         not(target_family = "wasm"),
         doc = " If true, settles against external oracle time feed instead of ledger time."
     )]
-    pub use_oracle: bool,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Optional because records written before the oracle clock existed carry no"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `use_oracle` key at all; the SDK decodes an absent field as `None`, which"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " means ledger time. Every stream this build writes sets `Some(_)`, so the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " on-ledger shape of new records is unchanged."
+    )]
+    pub use_oracle: Option<bool>,
 }
 
 impl Stream {
@@ -558,6 +574,12 @@ impl Stream {
     /// (`create_stream` rejects `end_time <= start_time`).
     pub fn duration(&self) -> u64 {
         self.end_time - self.start_time
+    }
+
+    /// The oracle flag as behaviour. `None` is a pre-oracle record and settles
+    /// against ledger time, exactly like `Some(false)`.
+    pub fn uses_oracle(&self) -> bool {
+        self.use_oracle.unwrap_or(false)
     }
 }
 
