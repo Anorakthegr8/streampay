@@ -8219,7 +8219,7 @@ fn pre_oracle_stream_records_decode_and_migrate() {
 
     // A record this build writes carries the flag as a bool, never a void: the
     // stored layout of new streams is unchanged by the widening to `Option`.
-    let current_val: Val = (&current).try_into_val(&f.env).expect("encode stream");
+    let current_val: Val = current.try_into_val(&f.env).expect("encode stream");
     let written = ScVal::try_from_val(&f.env, &current_val).expect("stream scval");
     let map = match &written {
         ScVal::Map(Some(m)) => m.clone(),
