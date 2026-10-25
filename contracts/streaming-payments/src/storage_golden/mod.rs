@@ -344,7 +344,7 @@ pub(crate) fn kind_for_key(env: &Env, key_sc: &xdr::ScVal) -> Option<String> {
             DataKey::PendingUpgrade => "pending_upgrade",
             DataKey::MigrationCursor => "migration_cursor",
             // Dispatched so the generator labels them, but the committed corpus
-            // has no record of these five kinds yet — they entered `DataKey`
+            // has no record of these eight kinds yet — they entered `DataKey`
             // after the corpus was cut. `COVERED_KINDS` in `decode.rs` stays the
             // list of kinds CI actually pins.
             DataKey::OracleConfig => "oracle_config",
@@ -352,6 +352,9 @@ pub(crate) fn kind_for_key(env: &Env, key_sc: &xdr::ScVal) -> Option<String> {
             DataKey::PendingOwnership(_) => "pending_ownership",
             DataKey::PendingRateChange(_) => "pending_rate_change",
             DataKey::RateSegments(_) => "rate_segments",
+            DataKey::PendingSenderTransfer(_) => "pending_sender_transfer",
+            DataKey::SenderHistory(_) => "sender_history",
+            DataKey::RefundTarget(_) => "refund_target",
         }));
     }
     if let Ok(pk) = PolicyDataKey::try_from_val(env, key_sc) {

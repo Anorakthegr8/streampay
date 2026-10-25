@@ -202,6 +202,8 @@ test("a database built with the old NOT NULL stream_id is migrated in place", ()
       rmSync(dir, { recursive: true, force: true });
     } catch {}
   }
+});
+
 // Refund routing is a projection column, not a lifecycle state: the routing must
 // land, must survive every later event that does not mention it, and must not be
 // rewound by a late delivery (issue #204).

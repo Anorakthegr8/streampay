@@ -9452,7 +9452,7 @@ fn price_random_schedules(trials_count: usize) -> usize {
                 end_time,
                 cancelable: false,
                 status: StreamStatus::Active,
-                use_oracle: false,
+                use_oracle: Some(false),
             };
 
             // Ascending probes, so the monotonicity assertion has an ordering
@@ -11027,57 +11027,6 @@ fn run_withdraw_many_fuzz(seed: u64, rounds: usize) {
             theirs.push(entry);
         }
     }
-            let start_time = rng.below(1_000);
-            let mut cursor = start_time;
-            let mut totals = 0i128;
-            let mut exact = true;
-            let mut shapes: Vec<Shape> = Vec::new();
-            let mut segments = soroban_sdk::Vec::new(&env);
-            for _ in 0..1 + rng.below(5) {
-                let length = 1 + rng.below(500);
-                let rate = 1 + rng.below(1_000_000) as i128;
-                // Half the windows carry the shape acceptance writes, the rest
-                // a clipped head: a basis longer than the window it covers.
-                let head_shaped = rng.below(2) == 0;
-                exact &= !head_shaped;
-                let basis_seconds = if head_shaped {
-                    length * (1 + rng.below(3))
-                } else {
-                    length
-                };
-                let allocation = rate * length as i128;
-                shapes.push(Shape {
-                    start_time: cursor,
-                    length,
-                    allocation,
-                    basis_seconds,
-                    rate: if head_shaped { None } else { Some(rate) },
-                });
-                segments.push_back(RateSegment {
-                    start_time: cursor,
-                    end_time: cursor + length,
-                    allocation,
-                    basis_seconds,
-                });
-                totals += allocation;
-                cursor += length;
-                windows += 1;
-            }
-            let end_time = cursor;
-            let stream = Stream {
-                id: 1,
-                sender: sender.clone(),
-                recipient: recipient.clone(),
-                token: token.clone(),
-                deposit: totals,
-                withdrawn: 0,
-                start_time,
-                end_time,
-                cancelable: false,
-                status: StreamStatus::Active,
-                use_oracle: Some(false),
-            };
-
     for round in 0..rounds {
         let ctx = format!("seed {seed:#x} round {round}");
         f.advance_time(1 + rng.below(DAY));

@@ -35,7 +35,7 @@ export function validateWithdrawal(
       valid: false,
       error: "Invalid numeric amount.",
       overWithdrawal: false,
-      amount,
+      amount: 0n,
     };
   }
 

@@ -1265,16 +1265,7 @@ impl StreamingPayments {
     pub fn withdraw_max(env: Env, stream_id: u64) -> Result<i128, StreamError> {
         Self::require_not_frozen(&env)?;
         let mut s = Self::authorize_withdrawal(&env, stream_id)?;
-        Self::settle_accrued(&env, &mut s)
-
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
-        let amount = stream::available_amount_with_plan(&env, &s, resolved.timestamp)?;
-        if amount <= 0 {
-            return Err(surface::reject(Branch::WithdrawMaxNothingToWithdraw));
-        }
-
-        Self::pay_out(&env, &mut s, amount)?;
-        Ok(amount)
+        Self::settle_accrued(&env, stream_id, &mut s)
     }
 
     #[cfg_attr(
@@ -1429,7 +1420,7 @@ impl StreamingPayments {
         let mut skipped: u32 = 0;
         for id in stream_ids.iter() {
             let result = Self::authorize_batch_withdrawal(&env, id, &recipient)
-                .and_then(|mut s| Self::settle_accrued(&env, &mut s));
+                .and_then(|mut s| Self::settle_accrued(&env, id, &mut s));
             if strict {
                 // Any per-entry rejection aborts the batch, so the entries that
                 // already settled are rolled back with it.
@@ -1491,8 +1482,8 @@ impl StreamingPayments {
     /// resolve the stream's clock, take the whole accrued-but-unwithdrawn
     /// balance, and pay it out. Takes the already-authorized stream so the two
     /// entrypoints differ only in how they authorize.
-    fn settle_accrued(env: &Env, s: &mut Stream) -> Result<i128, StreamError> {
-        let resolved = oracle::resolve_stream_time(env, s.id, s.use_oracle);
+    fn settle_accrued(env: &Env, stream_id: u64, s: &mut Stream) -> Result<i128, StreamError> {
+        let resolved = oracle::resolve_stream_time(env, stream_id, s.uses_oracle());
         let amount = stream::available_amount_with_plan(env, s, resolved.timestamp)?;
         if amount <= 0 {
             return Err(surface::reject(Branch::WithdrawMaxNothingToWithdraw));
