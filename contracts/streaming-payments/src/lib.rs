@@ -566,7 +566,7 @@ impl StreamingPayments {
             end_time,
             cancelable,
             status: StreamStatus::Active,
-            use_oracle,
+            use_oracle: Some(use_oracle),
         };
         stream::put_stream(env, &s);
         stream::index_stream(env, &s);
@@ -743,7 +743,7 @@ impl StreamingPayments {
                 end_time: input.end_time,
                 cancelable: input.cancelable,
                 status: StreamStatus::Active,
-                use_oracle: false,
+                use_oracle: Some(false),
             };
             stream::put_stream(&env, &created);
             stream::index_stream(&env, &created);
@@ -990,7 +990,7 @@ impl StreamingPayments {
         }
         let mut s = Self::authorize_withdrawal(&env, stream_id)?;
 
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.use_oracle);
+        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
         let available = stream::available_amount_with_plan(&env, &s, resolved.timestamp)?;
         if amount > available {
             return Err(surface::reject(Branch::WithdrawAmountExceedsAvailable));
@@ -1041,7 +1041,7 @@ impl StreamingPayments {
         Self::require_not_frozen(&env)?;
         let mut s = Self::authorize_withdrawal(&env, stream_id)?;
 
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.use_oracle);
+        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
         let amount = stream::available_amount_with_plan(&env, &s, resolved.timestamp)?;
         if amount <= 0 {
             return Err(surface::reject(Branch::WithdrawMaxNothingToWithdraw));
@@ -1275,7 +1275,7 @@ impl StreamingPayments {
             }
         }
 
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.use_oracle);
+        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
         let (recipient_amount, sender_amount) =
             stream::cancel_amounts_with_plan(&env, &s, resolved.timestamp)?;
 
@@ -2321,7 +2321,7 @@ impl StreamingPayments {
         // other accrual read), clamped into the window: a proposal made before
         // `start_time` starts the new rate at `start_time`, and one that outlives
         // `end_time` has nothing left to re-rate.
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.use_oracle);
+        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
         let boundary = resolved.timestamp.max(s.start_time);
         if boundary >= s.end_time {
             return Err(surface::reject(Branch::RateProposalWindowElapsed));
@@ -2537,7 +2537,7 @@ impl StreamingPayments {
     )]
     pub fn available(env: Env, stream_id: u64) -> Result<i128, StreamError> {
         let s = stream::get_stream(&env, stream_id)?;
-        let resolved = oracle::resolve_stream_time(&env, stream_id, s.use_oracle);
+        let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
         stream::available_amount_with_plan(&env, &s, resolved.timestamp)
     }
 
@@ -3960,9 +3960,13 @@ impl StreamingPayments {
         let effective_start = effective_start.clamp(1, total);
         let end_id = (effective_start.saturating_add(batch_size).saturating_sub(1)).min(total);
 
-        // Migrate each stream in the batch: read, verify, touch TTL, re-store.
+        // Migrate each stream in the batch: read, backfill fields that were
+        // added after the record was written, touch TTL, re-store.
         for id in effective_start..=end_id {
-            if let Ok(s) = stream::get_stream(&env, id) {
+            if let Ok(mut s) = stream::get_stream(&env, id) {
+                if s.use_oracle.is_none() {
+                    s.use_oracle = Some(false);
+                }
                 stream::put_stream(&env, &s);
             }
         }
