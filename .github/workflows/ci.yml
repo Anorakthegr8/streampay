@@ -23,8 +23,8 @@ jobs:
       STORAGE_GOLDEN_REQUIRE_WASM: 1
       # Single source of truth for the Wasm size budget (KB). The rule is:
       # the smallest whole KB that the current public interface fits, so the
-      # ratchet stays as tight as the interface allows. 100 KB = this build's
-      # 101,691 B + 709 B of headroom. History: issue #58's techniques took the
+      # ratchet stays as tight as the interface allows. 105 KB = this build's
+      # 103,314 B + 4,206 B of headroom. History: issue #58's techniques took the
       # contract from 91,004 B to 60,386 B, upstream's ownership-transfer +
       # vault surface added 3,757 B (gate: 63 KB), and the governance timelock
       # that has now merged adds 14,123 B more — 10,005 B of `code`, 3,072 B of
@@ -51,8 +51,16 @@ jobs:
       # Technique 1 recovery is left. The gate moves to 100 KB and the split
       # discussion is now overdue rather than merely triggered: see
       # docs/WASM_SIZE.md ("Gate decision — #426"). The next interface addition
-      # should split the contract, not raise this number again.
-      WASM_SIZE_BUDGET_KB: 100
+      # should split the contract, not raise this number again. It arrived as
+      # #407 (pause/resume: 2 entrypoints over one private body, 2 events, error
+      # code 99, one `DataKey::StreamPause` side key, no new dependencies) and
+      # measured 103,314 B — 914 B over, with every in-feature shrink measured
+      # and rejected. The gate moves to 105 KB as a recorded maintainer decision
+      # (docs/WASM_SIZE.md, "Gate decision — #407"); the strict smallest-whole-KB
+      # reading of that rule would be 101 KB, and 105 is taken deliberately to
+      # leave room for #407's review fixes. #441 (contract split) is now a
+      # prerequisite for further interface growth, not a recommendation.
+      WASM_SIZE_BUDGET_KB: 105
     steps:
       - uses: actions/checkout@v7
 

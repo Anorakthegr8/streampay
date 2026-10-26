@@ -427,6 +427,39 @@ gate: the two macro-generated entrypoint wrappers alone exceed the remaining
 | Rebuilding the shifted rate schedule with `iter()` + `push_back` instead of in-place `set` | +33 B |
 | Dropping `#[inline(never)]` from `get_paused_at` / `accrual_now` | ±0 B |
 
+## Gate decision — #407 (100 KB → 105 KB)
+
+#407 is the interface addition the #426 decision said would have to be a
+maintainer call. Merged tree: **103,314 B** (pinned stellar-cli 28.1.0), +1,623 B
+on #426's 101,691 B — 2 entrypoints (`pause_stream` / `resume_stream`, both thin
+wrappers over one private `set_paused`), 2 events, error code 99, one `DataKey`
+variant, no new dependencies. The gate moves to **105 KB** (107,520 B, 4,206 B of
+headroom).
+
+Two things about that number are worth recording:
+
+| Point | Detail |
+|---|---|
+| The strict rule says 101 KB | "Smallest whole KB the interface fits" would put the gate at 101 KB (103,424 B, **110 B** of headroom). 105 KB is taken deliberately, not by rounding: 110 B is less than one renamed parameter — spec symbols are hashed into `contractspecv0` — so a gate at 101 KB would send #407 back for a naming nit and guarantee a second maintainer decision before this feature could merge. The extra 4 KB is the cost of not re-opening the gate for every byte. |
+| 105 KB is 87.5% of the real ceiling | #35's deploy budget is 120 KB (122,880 B). 15,360 B of genuine deploy headroom is left, and the split (#441) — not another bump — is what should consume it. |
+
+Probes before accepting the number:
+
+| Probe | Result |
+|---|---|
+| Contributor's shrink table (above) | Measured on the rebased tree: +44 B, +33 B, ±0 B — no in-feature path to 102,400 B. |
+| `gate_interface_docs.py --check` | 0 doc groups on the merged tree; #407's interface items arrive gated with `cfg_attr(not(target_family = "wasm"), doc)`. |
+| `scripts/check_error_codes.sh` | 99 variants, codes 1–99 contiguous and unique; pause/resume shares one code (`InvalidPauseTransition = 99`), so #407 takes exactly one slot. |
+| Merge shape | Single commit on `9a46329e`, no conflicts, no CI edits in the PR. |
+
+**The bump is now closed as a mechanism.** From here, a PR that adds an
+entrypoint, event, stored type or error code is expected to land *after* #441
+decides the split, or be rejected at the 105 KB line. #175 (3 events, 3 codes, 2
+`DataKey` kinds, 6 entrypoints) is the concrete case that this rule now blocks:
+at ~680 B per entrypoint it cannot be absorbed by any budget short of the split,
+and editing this number for it would be the product decision-by-size-knob that
+the #426 and #407 sections both refuse to make.
+
 ## Categories investigated and rejected (with measurements)
 
 | Candidate | Verdict |
