@@ -33,7 +33,7 @@ use crate::{
     governance::{GovernanceAction, GovernanceDataKey},
     policy::{PolicyDataKey, StreamPolicy},
     sponsor::SponsorKey,
-    stream::{DataKey, OwnershipRole},
+    stream::{DataKey, OwnershipRole, WithdrawOutcome},
     StreamingPayments,
 };
 
@@ -106,7 +106,7 @@ pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
     // ── 1. Storage keys probe (covers all 4 key enums in the contract) ──────
     let mut storage_keys_json = std::vec![];
 
-    // DataKey probe (21 variants)
+    // DataKey probe (25 variants)
     let datakey_cases: StdVec<(&str, &str, &str, DataKey)> = std::vec![
         (
             "NextStreamId",
@@ -213,6 +213,30 @@ pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
             "RateSegments(u64)",
             "persistent",
             DataKey::RateSegments(1)
+        ),
+        (
+            "PendingSenderTransfer",
+            "PendingSenderTransfer(u64)",
+            "persistent",
+            DataKey::PendingSenderTransfer(1)
+        ),
+        (
+            "SenderHistory",
+            "SenderHistory(u64)",
+            "persistent",
+            DataKey::SenderHistory(1)
+        ),
+        (
+            "RefundTarget",
+            "RefundTarget(u64)",
+            "persistent",
+            DataKey::RefundTarget(1)
+        ),
+        (
+            "StreamPause",
+            "StreamPause(u64)",
+            "persistent",
+            DataKey::StreamPause(1)
         ),
     ];
 
@@ -417,7 +441,7 @@ pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
         }
     });
 
-    // ── 2. Events probe (all 40 contract events) ────────────────────────────
+    // ── 2. Events probe (all 51 contract events) ────────────────────────────
     struct EventCase {
         name: &'static str,
         topics: StdVec<(&'static str, &'static str)>,
@@ -966,6 +990,173 @@ pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
                 executed_by: sender.clone(),
             }
         ),
+        event_case!(
+            BatchWithdrawSummary,
+            topics: [("recipient", "Address")],
+            data: [
+                ("settled", "Vec<WithdrawOutcome>"),
+                ("total", "i128"),
+                ("requested", "u32"),
+                ("skipped", "u32")
+            ],
+            BatchWithdrawSummary {
+                recipient: recipient.clone(),
+                settled: Vec::from_array(
+                    env,
+                    [WithdrawOutcome {
+                        stream_id: 1,
+                        amount: 500,
+                    }],
+                ),
+                total: 500,
+                requested: 1,
+                skipped: 0,
+            }
+        ),
+        event_case!(
+            StreamPaused,
+            topics: [("stream_id", "u64")],
+            data: [("paused_at", "u64")],
+            StreamPaused {
+                stream_id: 1,
+                paused_at: 150,
+            }
+        ),
+        event_case!(
+            StreamResumed,
+            topics: [("stream_id", "u64")],
+            data: [("new_end_time", "u64")],
+            StreamResumed {
+                stream_id: 1,
+                new_end_time: 250,
+            }
+        ),
+        event_case!(
+            DisputeRaised,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("recipient", "Address"),
+                ("bond", "i128"),
+                ("expires_at", "u64")
+            ],
+            DisputeRaised {
+                stream_id: 1,
+                recipient: recipient.clone(),
+                bond: 50,
+                expires_at: 1000,
+            }
+        ),
+        event_case!(
+            DisputeResolved,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("sender", "Address"),
+                ("accept", "bool"),
+                ("bond", "i128")
+            ],
+            DisputeResolved {
+                stream_id: 1,
+                sender: sender.clone(),
+                accept: true,
+                bond: 50,
+            }
+        ),
+        event_case!(
+            DisputeExpired,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("recipient", "Address"),
+                ("bond", "i128"),
+                ("sender_share", "i128"),
+                ("recipient_share", "i128")
+            ],
+            DisputeExpired {
+                stream_id: 1,
+                recipient: recipient.clone(),
+                bond: 50,
+                sender_share: 25,
+                recipient_share: 25,
+            }
+        ),
+        event_case!(
+            StreamRecordMigrated,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("from_version", "u32"),
+                ("to_version", "u32")
+            ],
+            StreamRecordMigrated {
+                stream_id: 1,
+                from_version: 1,
+                to_version: 2,
+            }
+        ),
+        event_case!(
+            SenderTransferProposed,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("sender_from", "Address"),
+                ("new_sender", "Address"),
+                ("nonce", "u64"),
+                ("expires_at", "u64"),
+                ("transfer_refund_rights", "bool")
+            ],
+            SenderTransferProposed {
+                stream_id: 1,
+                sender_from: sender.clone(),
+                new_sender: recipient.clone(),
+                nonce: 1,
+                expires_at: 10000,
+                transfer_refund_rights: false,
+            }
+        ),
+        event_case!(
+            SenderTransferred,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("sender_from", "Address"),
+                ("sender_to", "Address"),
+                ("nonce", "u64"),
+                ("refund_rights_transferred", "bool")
+            ],
+            SenderTransferred {
+                stream_id: 1,
+                sender_from: sender.clone(),
+                sender_to: recipient.clone(),
+                nonce: 1,
+                refund_rights_transferred: false,
+            }
+        ),
+        event_case!(
+            SenderTransferExpired,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("sender_from", "Address"),
+                ("new_sender", "Address"),
+                ("nonce", "u64")
+            ],
+            SenderTransferExpired {
+                stream_id: 1,
+                sender_from: sender.clone(),
+                new_sender: recipient.clone(),
+                nonce: 1,
+            }
+        ),
+        event_case!(
+            StreamRefundTargetChanged,
+            topics: [("stream_id", "u64")],
+            data: [
+                ("previous_target", "Address"),
+                ("new_target", "Address"),
+                ("at_creation", "bool")
+            ],
+            StreamRefundTargetChanged {
+                stream_id: 1,
+                previous_target: sender.clone(),
+                new_target: recipient.clone(),
+                at_creation: false,
+            }
+        ),
     ];
 
     let mut events_json = std::vec![];
@@ -988,7 +1179,7 @@ pub fn generate_schema_representation(env: &Env) -> serde_json::Value {
         }));
     }
 
-    // ── 3. Error codes probe (all 83 codes) ─────────────────────────────────
+    // ── 3. Error codes probe (all 99 codes) ─────────────────────────────────
     let mut error_codes_json = std::vec![];
     for err in StreamError::ALL {
         let code = err.code();
