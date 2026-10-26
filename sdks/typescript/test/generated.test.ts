@@ -5,6 +5,10 @@ import { nativeToScVal, scValToNative, xdr } from "@stellar/stellar-sdk";
 
 import {
   decodeCreateStreamsBatchResult,
+  decodeGovernanceAction,
+  encodeGovernanceAction,
+  encodeGovernanceProposeArgs,
+  type GovernanceAction,
   decodeIntentStatus,
   decodeStreamPayEvent,
   addressToScVal,
@@ -50,6 +54,47 @@ test("Stream round-trips through its ScVal codec, including use_oracle", () => {
     useOracle: true,
   };
   assert.deepEqual(decodeStream(scValToNative(encodeStream(stream))), stream);
+});
+
+test("Stream.use_oracle is Option<bool>: legacy records decode to null, new ones keep Some(bool)", () => {
+  const stream: Stream = {
+    id: 1n,
+    sender: SENDER,
+    recipient: RECIPIENT,
+    token: TOKEN,
+    deposit: 100n,
+    withdrawn: 0n,
+    startTime: 0n,
+    endTime: 1000n,
+    cancelable: false,
+    status: "Active",
+    useOracle: false,
+  };
+  const entries = (scVal: xdr.ScVal): xdr.ScMapEntry[] => {
+    if (!("map" in scVal) || !Array.isArray(scVal.map)) throw new Error("expected an ScVal map");
+    return scVal.map;
+  };
+  const keyOf = (item: xdr.ScMapEntry) => scValToNative(item.key) as string;
+  const wire = (scVal: xdr.ScVal) => scVal.toXDR("base64");
+  const entry = (scVal: xdr.ScVal, key: string) =>
+    entries(scVal).find((item) => keyOf(item) === key)!.val;
+
+  // Every stream this contract build writes stores Some(_): still a bare
+  // ScVal::Bool on the wire, never void.
+  const current = encodeStream(stream);
+  assert.equal(wire(entry(current, "use_oracle")), wire(xdr.ScVal.scvBool(false)));
+  assert.deepEqual(decodeStream(scValToNative(current)), stream);
+
+  // None encodes as ScVal::Void and decodes back to null.
+  const none = encodeStream({ ...stream, useOracle: null });
+  assert.equal(wire(entry(none, "use_oracle")), wire(xdr.ScVal.scvVoid()));
+  assert.equal(decodeStream(scValToNative(none)).useOracle, null);
+
+  // A pre-oracle (v0.3.0) record has no `use_oracle` key at all.
+  const legacy = xdr.ScVal.scvMap(
+    entries(current).filter((item) => keyOf(item) !== "use_oracle")
+  );
+  assert.equal(decodeStream(scValToNative(legacy)).useOracle, null);
 });
 
 test("enum codecs cover every declared case", () => {
@@ -210,4 +255,48 @@ test("batch results decode Ok values and contract errors per entry", () => {
     { ok: 5n },
     { error: "StreamNotActive" },
   ]);
+});
+
+test("unit enums use Soroban's Vec[Symbol] wire form", () => {
+  const encoded = encodeStreamStatus("Cancelled");
+  const expected = xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("Cancelled")]);
+  assert.equal(encoded.toXDR("base64"), expected.toXDR("base64"));
+  // What the contract stores and what scValToNative yields for it.
+  assert.equal(decodeStreamStatus(["Cancelled"]), "Cancelled");
+  assert.throws(() => decodeStreamStatus(1));
+});
+
+test("payload enums encode as [Symbol(variant), payload...] and round-trip", () => {
+  const cases: GovernanceAction[] = [
+    { variant: "SetFeeBps", payload: [25] },
+    { variant: "SetFrozen", payload: [true] },
+    { variant: "WithdrawTreasury", payload: [TOKEN, RECIPIENT, 5n] },
+    { variant: "ExecuteUpgrade", payload: [] },
+    { variant: "SetSigners", payload: [[SENDER, RECIPIENT]] },
+    {
+      variant: "SetStreamPolicy",
+      payload: [
+        null,
+        { minRate: 1n, maxRate: 10n, minDeposit: 100n, minDuration: 60n, maxDuration: 3600n },
+      ],
+    },
+  ];
+  for (const action of cases) {
+    assert.deepEqual(decodeGovernanceAction(scValToNative(encodeGovernanceAction(action))), action);
+  }
+  const fee = encodeGovernanceAction({ variant: "SetFeeBps", payload: [25] });
+  const expected = xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol("SetFeeBps"),
+    nativeToScVal(25, { type: "u32" }),
+  ]);
+  assert.equal(fee.toXDR("base64"), expected.toXDR("base64"));
+  const args = encodeGovernanceProposeArgs({
+    caller: SENDER,
+    action: { variant: "ExecuteUpgrade", payload: [] },
+  });
+  assert.equal(args.length, 2);
+  assert.equal(
+    args[1]!.toXDR("base64"),
+    xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("ExecuteUpgrade")]).toXDR("base64")
+  );
 });

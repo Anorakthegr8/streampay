@@ -8,12 +8,19 @@
  *     ContractEvent XDR
  *   * transaction envelopes: real signed Soroban invoke envelopes built with
  *     @stellar/stellar-sdk from the spec's argument list
- *   * results: ScVal values encoded from the function's return type
+ *   * results: ScVal values encoded from the function's return type; struct
+ *     results (get_stream) are copied from a contract-data ledger entry in the
+ *     same snapshots
+ *   * error codes: looked up by name in the canonical catalog
+ *     (frontend/lib/errors.ts), never restated here
  *
  * Everything is deterministic: fixed key seeds, fixed fee, no time bounds.
  * `git diff --exit-code sdks/vectors` is a valid regeneration check.
  *
- * Run from sdks/typescript:  node scripts/build-fixtures.mjs
+ * This builder is shared tooling, not a language SDK: it only needs
+ * @stellar/stellar-sdk to assemble signed envelopes.
+ *
+ * Run:  cd sdks/vectors/builder && npm ci && node build-vectors.mjs
  */
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -44,6 +51,19 @@ const fingerprint = readFileSync(
   join(root, "sdks", "spec", "FINGERPRINT"),
   "utf8"
 ).trim();
+
+/** Error codes by name, from the canonical catalog generated from errors.rs. */
+const catalogText = readFileSync(join(root, "frontend", "lib", "errors.ts"), "utf8");
+const ERROR_CODES = Object.fromEntries(
+  [...catalogText.matchAll(/^\s*(\d+):\s*\{\s*code:\s*\d+,\s*name:\s*"(\w+)"/gm)].map(
+    ([, code, name]) => [name, Number(code)]
+  )
+);
+const errorCode = (name) => {
+  const code = ERROR_CODES[name];
+  if (code === undefined) throw new Error(`${name} is not in frontend/lib/errors.ts`);
+  return code;
+};
 
 const CONTRACT_ID = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4";
 const SNAPSHOT_DIR = join(
@@ -110,10 +130,66 @@ const inferType = (node) => {
   return "void";
 };
 
+/**
+ * Canonical JSON for a snapshot node of a known spec type: structs become
+ * objects keyed by field name, unit enums become their case name.
+ */
+const canonicalOf = (node, type) => {
+  if (typeof type === "object") {
+    if ("option" in type) return "void" in node ? null : canonicalOf(node, type.option);
+    if ("vec" in type) return node.vec.map((item) => canonicalOf(item, type.vec));
+    throw new Error(`unsupported type ${JSON.stringify(type)}`);
+  }
+  const struct = spec.structs.find((candidate) => candidate.name === type);
+  if (struct) {
+    const out = {};
+    for (const field of struct.fields) {
+      const entry = node.map.find((candidate) => candidate.key.symbol === field.name);
+      if (!entry) throw new Error(`${type} snapshot is missing ${field.name}`);
+      out[field.name] = canonicalOf(entry.val, field.type);
+    }
+    return out;
+  }
+  const enumSpec = spec.enums.find((candidate) => candidate.name === type);
+  if (enumSpec) {
+    // Soroban encodes a unit enum without discriminants as Vec[Symbol(case)].
+    if (enumSpec.encoding === "symbol") return node.vec[0].symbol;
+    return enumSpec.cases.find((c) => c.value === Number(node.u32)).name;
+  }
+  return decodeJson(node, type);
+};
+
+const loadSnapshot = (snapshotFile) =>
+  JSON.parse(readFileSync(join(SNAPSHOT_DIR, snapshotFile), "utf8"));
+
+/** The `Stream` struct stored for `streamId` in a snapshot's ledger. */
+const loadStoredStream = (snapshotFile, streamId) => {
+  const snapshot = loadSnapshot(snapshotFile);
+  const matches = snapshot.ledger.ledger_entries
+    .map((item) => item.entry?.data?.contract_data)
+    .filter(
+      (data) =>
+        data &&
+        data.contract === CONTRACT_ID &&
+        data.key?.vec?.[0]?.symbol === "Stream" &&
+        data.key.vec[1]?.u64 === streamId
+    );
+  if (matches.length !== 1) {
+    throw new Error(`${snapshotFile}: expected one stored Stream ${streamId}, found ${matches.length}`);
+  }
+  // Since the stream-record versioning on main, a stored record is a
+  // `VersionedStream { stream, version }`; a legacy (v1) record is the bare
+  // `Stream` map. `get_stream` returns the inner `Stream` either way.
+  const val = matches[0].val;
+  const keys = val.map?.map((entry) => entry.key.symbol) ?? [];
+  if (keys.length === 2 && keys.includes("stream") && keys.includes("version")) {
+    return val.map.find((entry) => entry.key.symbol === "stream").val;
+  }
+  return val;
+};
+
 const loadEvent = (snapshotFile, eventName) => {
-  const snapshot = JSON.parse(
-    readFileSync(join(SNAPSHOT_DIR, snapshotFile), "utf8")
-  );
+  const snapshot = loadSnapshot(snapshotFile);
   const matches = snapshot.events.filter(
     (entry) =>
       (entry.event?.type === "contract" || entry.event?.type_ === "contract") &&
@@ -169,9 +245,9 @@ const build = (scenario) => {
   const events = event ? [event] : [];
   let result;
   if (scenario.error) {
-    result = { error: { name: scenario.error, code: scenario.errorCode } };
+    result = { error: { name: scenario.error, code: errorCode(scenario.error) } };
   } else {
-    result = { ok: scenario.result ? scenario.result : null };
+    result = { ok: scenario.result === undefined ? null : scenario.result };
   }
 
   const expectedTransaction = {
@@ -191,7 +267,7 @@ const build = (scenario) => {
     provenance: scenario.provenance,
     transactionEnvelopeXdr: envelopeXdr,
     resultXdr: scenario.error
-      ? contractErrorScValXdr(scenario.errorCode)
+      ? contractErrorScValXdr(errorCode(scenario.error))
       : scenario.resultScVal(event),
     eventsXdr: events.map((item) => contractEventXdr(item, StrKey)),
     expected: {
@@ -278,15 +354,26 @@ const scenarios = [
   {
     name: "error-not-active",
     provenance:
-      "WithdrawMax envelope against a cancelled stream; result is ScVal::Error(SCError::Contract(5)) = StreamNotActive.",
+      "WithdrawMax envelope against a cancelled stream; result is ScVal::Error(SCError::Contract(code)) with the StreamNotActive code from frontend/lib/errors.ts.",
     snapshot: null,
     event: null,
     function: "withdraw_max",
     args: () => ({ stream_id: "1" }),
-    resultScVal: () => contractErrorScValXdr(5),
     error: "StreamNotActive",
-    errorCode: 5,
   },
+  ...[
+    ["get-stream-active", "create_stream_accepts_exact_capacity_boundary.1.json"],
+    ["get-stream-cancelled", "cancel_before_start_refunds_everything_to_sender.1.json"],
+  ].map(([name, snapshot]) => ({
+    name,
+    provenance: `Stored Stream 1 (contract-data ledger entry) from contracts/streaming-payments/test_snapshots/test/${snapshot}; status is the contract's Vec[Symbol] enum encoding.`,
+    snapshot,
+    event: null,
+    function: "get_stream",
+    args: () => ({ stream_id: "1" }),
+    resultScVal: () => scValXdr(loadStoredStream(snapshot, "1"), StrKey),
+    result: canonicalOf(loadStoredStream(snapshot, "1"), "Stream"),
+  })),
 ];
 
 mkdirSync(vectorsDir, { recursive: true });

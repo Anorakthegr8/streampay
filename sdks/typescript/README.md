@@ -41,6 +41,10 @@ const client = new StreamPayClient({
 // Every operation takes one named-argument object; reads need no signer.
 const stream = await client.getStream({ streamId: 1n });
 console.log(stream.deposit, stream.status, stream.startTime, stream.useOracle);
+// `useOracle` is `boolean | null` (the contract's `Option<bool>`): `null` is a
+// record written before the oracle clock existed and settles on ledger time,
+// exactly like `false`. The `create_stream_with_oracle` / `resolve_time`
+// arguments stay a plain `boolean`.
 
 // Mutating calls: build -> simulate -> sign -> send -> poll -> decode
 const id = await client.createStream({
@@ -62,11 +66,23 @@ Oracle-settled streams use the same shape with `createStreamWithOracle`:
 await client.createStreamWithOracle({ ...createStreamArgs, useOracle: true });
 ```
 
-The client exposes every contract entrypoint (`createStreams`,
-`createStreamsBatch`, `scheduleStream`, the treasury/governance setters, the
-sponsor relay, ownership transfer, oracle configuration, …) with the same
-one-object calling convention. `FUNCTIONS` and `METHODS` export the generated
-operation metadata.
+The client exposes every contract entrypoint in the spec (`createStreams`,
+`createStreamsBatch`, `scheduleStream`, treasury/fee, the `policy_*` set,
+governor rotation and upgrades, freeze, disputes, rate changes, the sponsor
+relay, ownership transfer, oracle configuration, the `governance_*` timelock,
+…) with the same one-object calling convention. `FUNCTIONS` and `METHODS`
+export the generated operation metadata.
+
+Contract enums follow the contract's wire encoding: unit enums are string
+unions (`"Active" | "Cancelled" | "Depleted"`, encoded `Vec[Symbol]`), and
+payload enums such as `GovernanceAction` are tagged objects:
+
+```ts
+await client.governancePropose({
+  caller: signerAddress,
+  action: { variant: "SetFeeBps", payload: [25] },
+});
+```
 
 For a browser wallet, pass any object implementing `Signer`:
 
@@ -144,8 +160,9 @@ decode for the shared fixtures.
 
 ## Versioning and publishing
 
-Tracks the contract release line; see
-[`../README.md`](../README.md#versioning-policy). The package is not published
-today (`npm pack` is the supported distribution), and the StreamPay maintainers
-own any future release. `npm pack --dry-run` runs in CI; no registry credentials
-are used by pull requests.
+The package version tracks the contract release line (currently `0.3.0`).
+Whether `@streampay/sdk` is published at all is undecided and is the StreamPay
+maintainers' call; if it is, they hold the npm scope and run the release.
+Until then `npm pack` / the workspace path is the supported distribution.
+CI runs `npm pack --dry-run` only; no registry credentials are used by pull
+requests.

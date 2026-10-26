@@ -1,15 +1,20 @@
 PYTHON ?= python3
+VECTORS_BUILDER := vectors/builder
 TS_DIR := typescript
 
-.PHONY: help generate check check-spec vectors test publish-dry-run clean
+.PHONY: help spec generate check check-spec vectors test publish-dry-run clean
 
 help:
-	@echo "generate          regenerate the TypeScript client from sdks/spec/streampay.spec.json"
-	@echo "check             schema guard + spec coverage tests + generated-output drift"
-	@echo "check-spec        schema guard + spec coverage tests only"
+	@echo "spec              re-derive spec/streampay.spec.json + FINGERPRINT from the contract"
+	@echo "generate          run every language emitter whose package is present"
+	@echo "check             schema guard + spec/vector/catalog tests + generated-output drift"
+	@echo "check-spec        schema guard + tests only"
 	@echo "vectors           rebuild conformance vectors (deterministic)"
-	@echo "test              run the TypeScript SDK test suite"
-	@echo "publish-dry-run   npm packaging check (no upload)"
+	@echo "test              TypeScript SDK: typecheck, build, tests (incl. vectors)"
+	@echo "publish-dry-run   npm pack --dry-run for the TypeScript SDK (no upload)"
+
+spec:
+	$(PYTHON) generator/check_contract_surface.py --write-spec
 
 generate:
 	$(PYTHON) generator/generate.py
@@ -22,10 +27,10 @@ check: check-spec
 	$(PYTHON) generator/generate.py --check
 
 vectors:
-	cd $(TS_DIR) && node scripts/build-fixtures.mjs
+	cd $(VECTORS_BUILDER) && npm ci && node build-vectors.mjs
 
 test:
-	cd $(TS_DIR) && npm test
+	cd $(TS_DIR) && npm ci && npm run typecheck && npm test
 
 publish-dry-run:
 	cd $(TS_DIR) && npm pack --dry-run

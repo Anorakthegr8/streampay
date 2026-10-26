@@ -1,8 +1,8 @@
 # Conformance vectors
 
 One JSON file per contract scenario. Every SDK must decode it to exactly the
-recorded `expected` payload. The TypeScript SDK consumes them today; the Rust
-and Python follow-ups will consume the same files.
+recorded `expected` payload. No language SDK is part of this change; each SDK
+PR adds a test that decodes every file here.
 
 ## Vector format (`streampay-vector/v1`)
 
@@ -48,6 +48,7 @@ and Python follow-ups will consume the same files.
   in JavaScript
 * addresses are strkeys (`G…` / `C…`)
 * `void` is `null`
+* unit enums are their case name (`"Cancelled"`), whatever their wire encoding
 * struct fields use their wire names (`start_time`, not `startTime`)
 * event data keys are the symbol keys the contract emits
 * argument objects are keyed by the spec's argument names, in spec order
@@ -62,18 +63,26 @@ and Python follow-ups will consume the same files.
 * **Transaction envelopes** are real signed Soroban invoke envelopes built with
   `@stellar/stellar-sdk` from the same values, with fixed key seeds, fixed fee,
   and no time bounds, so regeneration is deterministic.
-* **Results** are ScVals encoded from the function's return type; the error
-  vector encodes `SCError::Contract(5)`.
+* **Struct results** (`get-stream-*`) are the stored `Stream` contract-data
+  ledger entry from the same snapshots, so they carry the contract's real enum
+  encoding (`status` is `Vec[Symbol("Cancelled")]`).
+* **Other results** are ScVals encoded from the function's return type; the
+  error vector encodes `SCError::Contract(code)`, with the code looked up by
+  name in `frontend/lib/errors.ts`.
 
 ## Regenerating
 
 ```bash
-make -C sdks vectors        # cd sdks/typescript && node scripts/build-fixtures.mjs
+make -C sdks vectors        # cd sdks/vectors/builder && npm ci && node build-vectors.mjs
 git diff --exit-code sdks/vectors
 ```
 
-The builder is `sdks/typescript/scripts/build-fixtures.mjs`. CI runs it and
-fails if the checked-in vectors change. If you have a deployed testnet contract
+The builder is `sdks/vectors/builder/build-vectors.mjs`, a private Node package
+(pinned `@stellar/stellar-sdk`, committed lockfile) that only assembles
+envelopes; it is shared tooling, not an SDK. CI runs it and fails if the
+checked-in vectors change. `sdks/generator/test_vectors_and_catalog.py` also
+checks that every vector carries the current spec fingerprint and only uses
+operations, arguments and events the spec declares. If you have a deployed testnet contract
 and want to capture live events instead, decode `getEvents().valueXdr` into a
 `ContractEvent` XDR array; the vector schema only requires the base64 fields, so
 `eventsXdr` can be replaced with captured values (keep `expected` in sync).
@@ -84,4 +93,4 @@ and want to capture live events instead, decode `getEvents().valueXdr` into a
 2. Add it to the `scenarios` array in the builder.
 3. Regenerate and inspect the `expected` block: it is the oracle every SDK must
    match.
-4. Run `make -C sdks test`.
+4. Run `make -C sdks check`.

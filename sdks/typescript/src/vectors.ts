@@ -1,9 +1,11 @@
 /**
  * Decodes the shared conformance vectors into canonical JSON.
  *
- * This file is the TypeScript half of the cross-language suite. It deliberately
- * uses only public stellar-sdk decoding primitives, so it independently
- * validates the generated bindings against the Rust and Python implementations.
+ * This file is the TypeScript consumer of the shared conformance suite in
+ * sdks/vectors. It decodes the raw XDR with public stellar-sdk primitives plus
+ * the generated codecs and compares against the recorded canonical JSON, so a
+ * codec that drifts from the contract's wire format fails here. Later language
+ * SDKs consume the same files.
  */
 import {
   Networks,
@@ -55,6 +57,7 @@ function canonicalStream(value: xdr.ScVal): Canonical {
     end_time: stream.endTime.toString(),
     cancelable: stream.cancelable,
     status: stream.status,
+    use_oracle: stream.useOracle,
   };
 }
 

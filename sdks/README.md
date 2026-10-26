@@ -1,30 +1,34 @@
 # StreamPay client SDKs
 
-Typed clients for the StreamPay Soroban contract, generated from one canonical
-spec.
+Typed clients for the StreamPay Soroban contract, generated from one spec that
+is derived from the contract's own sources.
 
-| Language | Package | Status |
+| Piece | Path | Status |
 |---|---|---|
-| TypeScript | [`@streampay/sdk`](./typescript) (workspace only, not on npm) | in this change |
-| Rust | `streampay-sdk` | follow-up PR |
-| Python | `streampay-sdk` | follow-up PR |
+| Spec (contract IR) + schema guard | [`spec/`](./spec), [`generator/check_contract_surface.py`](./generator/check_contract_surface.py) | this change |
+| Generator driver | [`generator/generate.py`](./generator/generate.py) | this change |
+| Conformance vectors | [`vectors/`](./vectors) | this change |
+| TypeScript client | [`typescript/`](./typescript) (workspace / `npm pack` only, not on npm) | this change |
+| Rust, Python clients | — | later, one PR per language |
 
-The Rust and Python clients were split out of this change so each language can
-be reviewed against the shared spec on its own. The spec and generator land
-first; each SDK then adds only its package, runtime, and test suite.
+Language packages land separately so each one is reviewed against the shared
+spec on its own. This directory holds only what every language shares.
 
 ## Layout
 
 ```text
 sdks/
-  spec/streampay.spec.json     canonical contract IR + sha256 fingerprint
-  spec/FINGERPRINT             sha256 of the canonical JSON
+  spec/streampay.spec.json        contract IR, derived from the Rust sources
+  spec/FINGERPRINT                sha256 of the canonical spec JSON
   generator/check_contract_surface.py
-                               derives the IR from the Rust contract; coverage tests
-  generator/generate.py        IR -> TypeScript (generated.ts + methods.ts)
-  vectors/                     shared conformance fixtures (tx + events + result)
-  typescript/                  generated bindings + runtime + tests
-  Makefile                     generate / check / test / vectors
+                                  derives the IR from the contract; CI schema guard
+  generator/generate.py           runs every language emitter (emit_<lang>.py)
+  generator/test_*.py             coverage + vector + catalog tests (stdlib only)
+  vectors/*.json                  shared conformance fixtures (tx + events + result)
+  vectors/builder/                deterministic fixture builder (Node, stellar-sdk)
+  generator/emit_typescript.py    IR -> typescript/src/generated.ts + methods.ts
+  typescript/                     generated bindings + runtime + tests
+  Makefile                        spec / check / vectors
 ```
 
 ## The contract is the source of truth
@@ -36,88 +40,78 @@ hand-maintained:
 python3 sdks/generator/check_contract_surface.py --write-spec
 ```
 
-parses `contracts/streaming-payments/src/*.rs` and rewrites the IR from the
-contract's own surface:
+parses `contracts/streaming-payments/src/` (`lib.rs`, `events.rs`, `errors.rs`
+and every non-test module `lib.rs` declares) and rewrites the IR:
 
-* every `pub fn` in the `#[contractimpl]` block (the deploy-time
-  `__constructor` is not a client operation), with ordered arguments, argument
-  types, return types, and fallibility
-* every `#[contracttype]` struct/enum reachable from an entrypoint or event
-* event names, topic symbols, topic fields, and data fields
-* numeric constants clients need (`MAX_PAGE_SIZE`, `MAX_BATCH`, fee bounds, …)
+* every `pub fn` in the `#[contractimpl]` block, with ordered arguments,
+  argument types, return type and fallibility. The deploy-time
+  `__constructor` is parsed (it has no `->`) but is not listed as a client
+  operation;
+* every `#[contracttype]` struct, unit enum and payload enum reachable from an
+  entrypoint or event, including each unit enum's wire encoding;
+* event names, topic symbols, topic fields and data fields;
+* numeric constants clients need (`MAX_PAGE_SIZE`, `MAX_BATCH`, fee bounds, …).
 
-The normal (no-flag) run is the CI gate: it re-derives the IR and reports any
-drift. `sdks/generator/test_contract_surface.py` additionally fails when the
-spec's operation set is smaller than the contract's, and when an entrypoint
-named by the contract's own `surface.rs` branch registry is missing. That makes
-the coverage claim structural: adding a contract entrypoint without extending
-the spec is a red build, not a documentation bug.
+Docs come from both `///` comments and the contract's
+`#[cfg_attr(not(target_family = "wasm"), doc = "…")]` attributes.
+
+The no-flag run is the CI gate: it re-derives the IR and reports any drift by
+name. The tests in `generator/test_contract_surface.py` additionally fail when:
+
+* the spec's operation set is smaller (or larger) than the contract's;
+* an entrypoint named by `surface.rs`'s branch registry is missing;
+* the parser does not see every `pub fn` in the `#[contractimpl]` block;
+* an event, or a type an event references, disagrees with the canonical event
+  registry (`schemas/events/registry.json`, generated by the contract's own
+  `event_registry` test).
+
+So adding an entrypoint without regenerating the spec is a red build, not a
+documentation bug.
 
 ### Error codes come from the catalog
 
-The generator does **not** restate `StreamError`. It reads the canonical catalog
-in `frontend/lib/errors.ts`, which `tooling/generate-error-catalog.mjs`
-generates from `contracts/streaming-payments/src/errors.rs` and CI already gates
-for drift. A new error code therefore reaches the SDK by regenerating the
-catalog, and the SDK regeneration check fails until the client is refreshed.
+The spec does **not** restate `StreamError`, and neither does any generated
+client. `generate.py` reads `(code, name)` pairs from the canonical catalog in
+`frontend/lib/errors.ts`, which `tooling/generate-error-catalog.mjs` generates
+from `errors.rs` and CI already gates for drift. A test checks that the
+catalog reader sees every `StreamError` variant with its contract code. This
+change touches no error code and no `surface.rs` branch.
 
 ## Generation, not hand-writing
 
-```bash
-make -C sdks generate      # rewrite generated.ts + methods.ts
-make -C sdks check         # guard + coverage tests + "regeneration is a no-op"
-```
+`generate.py` loads the spec and the error catalog and runs each
+`generator/emit_<language>.py` whose package directory exists. Today that is
+`emit_typescript.py`, which writes `typescript/src/generated.ts` and
+`typescript/src/methods.ts`; the `--check` gate fails when either differs from
+the generator output. Generated files carry the spec fingerprint in their
+header; add behaviour in `client.ts` / `events.ts`, not in generated files.
 
-Generated files carry the spec fingerprint in their header. Hand edits inside
-`generated.ts` / `methods.ts` are overwritten; add behaviour in `client.ts`,
-`events.ts`, or the spec.
+```bash
+make -C sdks spec          # re-derive the spec + fingerprint
+make -C sdks generate      # rewrite generated.ts + methods.ts
+make -C sdks check         # guard + tests + "regeneration is a no-op"
+make -C sdks test          # TypeScript typecheck + tests, incl. every vector
+```
 
 ## Conformance vectors
 
-`sdks/vectors/*.json` contains signed transaction envelopes, contract-event
-XDR, and result ScVals, plus the canonical decode every SDK must produce. The
-fixtures are deterministic: fixed key seeds, fixed fee, no time bounds.
+`sdks/vectors/*.json` holds signed transaction envelopes, contract-event XDR and
+result ScVals, plus the canonical decode every SDK must produce. Event payloads
+and stored structs are copied from the contract's own test snapshots, so the
+values are real contract outputs. The fixtures are deterministic (fixed key
+seed, fixed fee, no time bounds).
 
 ```bash
-make -C sdks vectors       # rebuild the fixtures
-make -C sdks test          # TypeScript decodes every fixture to its expectation
+make -C sdks vectors       # rebuild; CI fails if this changes any file
 ```
 
-The vectors are language-agnostic. The TypeScript suite consumes them today;
-the Rust and Python follow-ups will consume the same files, and their decoders
-must equal the recorded expectation before they land.
+See [`vectors/README.md`](./vectors/README.md) for the format.
 
-## Versioning policy
+## Versioning and publishing
 
-The SDK tracks the contract release line (currently `0.3.0`).
-
-* **Patch** (`0.3.1`): runtime/documentation fixes, no wire changes.
-* **Minor** (`0.4.0`): new contract entrypoints/events/errors, or additive SDK
-  helpers. Previously generated code keeps working because Soroban only appends
-  API surface.
-* **Major** (`1.0.0`): breaking wire changes, including removals, renames,
-  re-typed arguments/returns, renumbered errors, or event topic changes. While
-  in `0.x`, a breaking contract change bumps the **minor** position and is
-  called out in `CHANGELOG.md`.
-* Every language shares the version. Published versions are immutable;
-  deprecate rather than overwrite.
-* `SPEC_FINGERPRINT` is exported by every SDK. Indexers and bots can assert it
-  matches the deployment they are talking to.
-
-## Publishing
-
-None of the packages is on a public registry yet. `@streampay/sdk` is **not**
-published to npm, so the install path is the workspace or an `npm pack`
-tarball (see [`typescript/README.md`](./typescript/README.md#install)).
-
-If the project decides to publish, the StreamPay maintainers (the Neziahtech
-organisation owners) own the release: they hold the npm scope and decide the
-release path. The SDK PR itself does not publish or claim a registry presence.
-
-## Known limitations
-
-* **TypeScript** decodes nested `Result` values from batch entrypoints as
-  `{ ok } | { error }`; the `Err` arm carries the `StreamError` name from the
-  catalog.
-* There is no live-network test. CI uses recorded vectors and an in-process
-  fake RPC, so it is deterministic and never needs funded testnet accounts.
+The spec and the TypeScript package track the contract release line
+(currently `0.3.0`). `@streampay/sdk` is **not** on npm: install it from the
+workspace path or an `npm pack` tarball (see
+[`typescript/README.md`](./typescript/README.md)). Whether it is published at
+all is undecided and is the StreamPay maintainers' call; they would hold the
+npm scope and run any release. CI only runs `npm pack --dry-run`.

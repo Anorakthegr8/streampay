@@ -49,9 +49,29 @@ CONTRACT = ROOT / "contracts" / "streaming-payments" / "src"
 SPEC_PATH = ROOT / "sdks" / "spec" / "streampay.spec.json"
 FINGERPRINT_PATH = ROOT / "sdks" / "spec" / "FINGERPRINT"
 
-SPEC_SCHEMA = "streampay-spec/v2"
+SPEC_SCHEMA = "streampay-spec/v3"
 
-MODULES = ["stream", "schedule", "sponsor", "treasury", "policy", "oracle"]
+def contract_modules(lib: str) -> list[str]:
+    """Non-test modules declared in ``lib.rs`` (``mod x;`` not behind a
+    test-only ``#[cfg(...)]``), in declaration order.
+
+    Discovering the modules from ``lib.rs`` instead of hard-coding them means a
+    new domain module (governance, disputes, ...) is scanned automatically.
+    """
+    modules: list[str] = []
+    lines = lib.splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"\s*(?:pub(?:\([\w:]+\))?\s+)?mod (\w+);", line)
+        if not match:
+            continue
+        name = match.group(1)
+        previous = lines[index - 1].strip() if index else ""
+        if previous.startswith("#[cfg(") and "test" in previous:
+            continue
+        if name.endswith("_test") or name.startswith("test") or name in ("errors", "events", "surface"):
+            continue
+        modules.append(name)
+    return modules
 
 PRIMITIVES = {
     "address",
@@ -79,28 +99,41 @@ READ_ONLY = {
     "available",
     "beneficiary_spend",
     "get_beneficiary_public_key",
+    "get_dispute",
     "get_intent",
     "get_sponsor",
     "get_stream",
     "get_stream_policy",
+    "governance_is_initialized",
+    "governance_proposal",
+    "governance_proposal_count",
+    "governance_signers",
+    "governance_veto_window",
     "is_frozen",
     "migration_progress",
     "oracle_config",
     "oracle_report",
     "pending_ownership_transfer",
+    "pending_rate_change",
+    "pending_sender_transfer",
     "pending_upgrade",
     "policy_admin",
     "policy_get_queued_asset",
     "policy_is_asset_allowed",
     "policy_pending_admin",
     "policy_timelock_delay",
+    "rate_segments",
     "recipient_streams",
+    "refund_target",
+    "required_dispute_bond",
     "resolve_time",
     "schema_version",
+    "sender_history",
     "sender_intents",
     "sender_streams",
     "sponsor_period_spend",
     "stream_fee",
+    "stream_record_version",
     "total_streams",
     "treasury_status",
     "verify_treasury",
@@ -202,28 +235,98 @@ def split_top_level(text: str, delimiter: str = ",") -> list[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
-def doc_before(source_lines: list[str], line_index: int) -> str:
-    """Collect the ``///`` block immediately above ``source_lines[line_index]``.
+def extract_docs(attrs: str) -> str:
+    """Collect doc text from ``///`` lines and ``doc = "..."`` attributes.
 
-    Attribute lines between the docs and the item are skipped; a blank line
-    ends the block.
+    The contract writes most docs as ``#[cfg_attr(not(target_family =
+    "wasm"), doc = "...")]`` so they stay out of the Wasm binary; both forms
+    are read, in source order.
+    """
+    docs: list[str] = []
+    for match in re.finditer(r'^\s*///(.*)$|\bdoc\s*=\s*("(?:[^"\\]|\\.)*")', attrs, re.MULTILINE):
+        if match.group(2) is not None:
+            literal = match.group(2)
+            try:
+                text = ast.literal_eval(literal)
+            except (ValueError, SyntaxError):
+                text = literal[1:-1]
+        else:
+            text = match.group(1)
+        docs.append(text[1:] if text.startswith(" ") else text)
+    return "\n".join(docs).strip("\n")
+
+
+def attrs_before(source_lines: list[str], line_index: int) -> str:
+    """Return the attribute/doc-comment block directly above an item.
+
+    Handles multi-line attributes (``#[cfg_attr(\n ...\n)]``). A blank line or
+    any other code ends the block.
     """
     index = line_index - 1
-    while index >= 0 and source_lines[index].lstrip().startswith("#["):
-        index -= 1
-    docs: list[str] = []
+    collected: list[str] = []
     while index >= 0:
         stripped = source_lines[index].strip()
+        if stripped.startswith("#["):
+            # `#[allow(...)] // why` — a trailing comment after an attribute.
+            stripped = re.sub(r"\]\s*//.*$", "]", stripped)
+        if stripped.startswith("///") or (stripped.startswith("#[") and stripped.endswith("]")):
+            collected.append(source_lines[index])
+            index -= 1
+            continue
+        if stripped.endswith(")]") and not stripped.startswith("#["):
+            # Tail of a multi-line attribute: walk up to its `#[` line.
+            block = [source_lines[index]]
+            index -= 1
+            while index >= 0 and not source_lines[index].strip().startswith("#["):
+                block.append(source_lines[index])
+                index -= 1
+            if index < 0:
+                break
+            block.append(source_lines[index])
+            collected.extend(block)
+            index -= 1
+            continue
+        break
+    return "\n".join(reversed(collected))
+
+
+def doc_before(source_lines: list[str], line_index: int) -> str:
+    """Docs attached to the item at ``source_lines[line_index]``."""
+    return extract_docs(attrs_before(source_lines, line_index))
+
+
+def block_members(block: str) -> list[tuple[str, str]]:
+    """Split a ``{ ... }`` body into ``(attributes, member line)`` pairs.
+
+    Attributes may span several lines; a member is any other non-blank,
+    non-comment line (a field, an enum case).
+    """
+    def bracket_delta(text: str) -> int:
+        # Brackets inside string literals (doc text) do not nest attributes.
+        code = re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)
+        return code.count("[") - code.count("]")
+
+    members: list[tuple[str, str]] = []
+    attrs: list[str] = []
+    depth = 0
+    for line in block.splitlines():
+        stripped = line.strip()
+        if depth > 0:
+            attrs.append(line)
+            depth += bracket_delta(stripped)
+            continue
+        if stripped.startswith("#["):
+            attrs.append(line)
+            depth = bracket_delta(stripped)
+            continue
         if stripped.startswith("///"):
-            docs.append(stripped[3:].lstrip())
-        elif stripped == "":
-            break
-        elif stripped.startswith("#["):
-            pass
-        else:
-            break
-        index -= 1
-    return "\n".join(reversed(docs))
+            attrs.append(line)
+            continue
+        if not stripped or stripped.startswith("//"):
+            continue
+        members.append(("\n".join(attrs), stripped))
+        attrs = []
+    return members
 
 
 def normalize_type(rust: str) -> str:
@@ -378,62 +481,50 @@ def parse_functions(source: str) -> list[dict]:
     return functions
 
 
-def parse_structs_and_enums(sources: dict[str, str]) -> tuple[list[dict], list[dict]]:
+def parse_structs_and_enums(
+    sources: dict[str, str],
+) -> tuple[list[dict], list[dict], list[dict]]:
     structs: list[dict] = []
     enums: list[dict] = []
+    unions: list[dict] = []
     for module, source in sources.items():
         lines = source.splitlines()
         for index, line in enumerate(lines):
-            struct_match = re.match(r"pub struct (\w+) \{", line)
-            enum_match = re.match(r"pub enum (\w+) \{", line)
+            struct_match = re.match(r"pub(?:\([\w:]+\))? struct (\w+) \{", line)
+            enum_match = re.match(r"pub(?:\([\w:]+\))? enum (\w+) \{", line)
             if not struct_match and not enum_match:
                 continue
             if not _contract_type(lines, index):
                 continue
+            brace = source.find("{", _line_offset(lines, index))
+            end = match_delimiter(source, brace, "{", "}")
+            block = source[brace + 1 : end]
+            doc = doc_before(lines, index)
             if struct_match:
-                name = struct_match.group(1)
-                brace = source.find("{", _line_offset(lines, index))
-                end = match_delimiter(source, brace, "{", "}")
-                block = source[brace + 1 : end]
-                fields = _parse_fields(block, module)
                 structs.append(
                     {
-                        "name": name,
-                        "doc": doc_before(lines, index),
-                        "fields": fields,
+                        "name": struct_match.group(1),
+                        "doc": doc,
+                        "fields": _parse_fields(block, module),
                     }
                 )
+                continue
+            name = enum_match.group(1)
+            try:
+                kind, encoding, cases = _parse_cases(block)
+            except ValueError as error:
+                # Storage-key enums may use shapes the IR does not model; that
+                # only matters if one is reachable, which the type check flags.
+                unmodelled.setdefault(name, str(error))
+                continue
+            if kind == "union":
+                unions.append({"name": name, "doc": doc, "cases": cases})
             else:
-                name = enum_match.group(1)
-                brace = source.find("{", _line_offset(lines, index))
-                end = match_delimiter(source, brace, "{", "}")
-                block = source[brace + 1 : end]
-                cases = _parse_cases(block)
-                if cases is None:
-                    # Payload enums are storage-key internals, not a client
-                    # surface. A reachable one would fail the type check below.
-                    continue
-                enums.append(
-                    {
-                        "name": name,
-                        "doc": doc_before(lines, index),
-                        "cases": cases,
-                    }
-                )
-    return structs, enums
+                enums.append({"name": name, "doc": doc, "encoding": encoding, "cases": cases})
+    return structs, enums, unions
 
 
-def _contract_type(lines: list[str], line_index: int) -> bool:
-    index = line_index - 1
-    while index >= 0:
-        stripped = lines[index].strip()
-        if stripped.startswith("#[contracttype]"):
-            return True
-        if stripped.startswith("///") or stripped.startswith("#["):
-            index -= 1
-            continue
-        return False
-    return False
+unmodelled: dict[str, str] = {}
 
 
 def _line_offset(lines: list[str], line_index: int) -> int:
@@ -442,50 +533,64 @@ def _line_offset(lines: list[str], line_index: int) -> int:
 
 def _parse_fields(block: str, module: str) -> list[dict]:
     fields: list[dict] = []
-    docs: list[str] = []
-    for line in block.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("///"):
-            docs.append(stripped[3:].lstrip())
-            continue
-        if stripped.startswith("#["):
-            continue
-        match = re.match(r"pub (\w+): (.+),\s*$", stripped)
+    for attrs, line in block_members(block):
+        match = re.match(r"pub (\w+): (.+),\s*$", line)
         if match:
             fields.append(
                 {
                     "name": match.group(1),
                     "type": parse_type(match.group(2)),
-                    "doc": "\n".join(docs),
+                    "doc": extract_docs(attrs),
                 }
             )
-        docs = []
+    declared = len(re.findall(r"^\s*pub \w+:", block, re.MULTILINE))
+    if declared != len(fields):
+        raise ValueError(
+            f"parsed {len(fields)} of {declared} struct fields; the member scan lost some"
+        )
     return fields
 
 
-def _parse_cases(block: str) -> list[dict] | None:
+def _parse_cases(block: str) -> tuple[str, str | None, list[dict]]:
+    """Parse enum cases into ``(kind, encoding, cases)``: ``("enum", "symbol"
+    | "u32", cases)`` for an all-unit enum, ``("union", None, cases)`` once any
+    case carries a tuple payload.
+
+    Soroban encodes a ``#[contracttype]`` enum without integer discriminants
+    as ``Vec[Symbol(case), payload...]`` (a unit case is ``Vec[Symbol(case)]``);
+    an enum whose cases all carry ``= N`` discriminants is an integer enum and
+    encodes as ``u32``. Both shapes are recorded so clients encode correctly.
+    """
     cases: list[dict] = []
-    docs: list[str] = []
-    next_value = 0
-    for line in block.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("///"):
-            docs.append(stripped[3:].lstrip())
-            continue
-        if not stripped or stripped.startswith("#["):
-            continue
-        match = re.match(r"(\w+)(?:\s*\(.*\))?(?:\s*=\s*(\d+))?,?$", stripped)
+    has_payload = False
+    has_discriminants = False
+    for attrs, line in block_members(block):
+        match = re.match(r"(\w+)\s*(\((.*)\))?\s*(?:=\s*(\d+))?\s*,?$", line)
         if not match:
-            raise ValueError(f"cannot parse enum case {stripped!r}")
-        if "(" in stripped:
-            # Unit enums are the contract's wire surface; payload enums are
-            # storage-key internals (DataKey/SponsorKey/PolicyDataKey).
-            return None
-        value = int(match.group(2)) if match.group(2) is not None else next_value
-        cases.append({"name": match.group(1), "value": value, "doc": "\n".join(docs)})
-        next_value = value + 1
-        docs = []
-    return cases
+            if re.match(r"\w+\s*\{", line):
+                raise ValueError(f"struct-like enum case {line!r} is not modelled")
+            raise ValueError(f"cannot parse enum case {line!r}")
+        case: dict = {"name": match.group(1), "doc": extract_docs(attrs)}
+        if match.group(2) is not None:
+            has_payload = True
+            case["types"] = [parse_type(part) for part in split_top_level(match.group(3))]
+        else:
+            case["types"] = []
+        if match.group(4) is not None:
+            has_discriminants = True
+            case["value"] = int(match.group(4))
+        cases.append(case)
+    if has_payload:
+        if has_discriminants:
+            raise ValueError("payload enum cases cannot carry discriminants")
+        return "union", None, cases
+    if has_discriminants:
+        if not all("value" in case for case in cases):
+            raise ValueError("enum mixes explicit and implicit discriminants")
+        return "enum", "u32", [
+            {"name": c["name"], "value": c["value"], "doc": c["doc"]} for c in cases
+        ]
+    return "enum", "symbol", [{"name": c["name"], "doc": c["doc"]} for c in cases]
 
 
 def parse_events(source: str) -> list[dict]:
@@ -501,26 +606,24 @@ def parse_events(source: str) -> list[dict]:
         block = source[brace + 1 : end]
         topics: list[dict] = []
         data: list[dict] = []
-        docs: list[str] = []
-        topic_pending = False
-        for field_line in block.splitlines():
-            stripped = field_line.strip()
-            if stripped.startswith("///"):
-                docs.append(stripped[3:].lstrip())
+        for attrs, field_line in block_members(block):
+            field = re.match(r"pub (\w+): (.+),\s*$", field_line)
+            if not field:
                 continue
-            if stripped == "#[topic]":
-                topic_pending = True
-                continue
-            field = re.match(r"pub (\w+): (.+),\s*$", stripped)
-            if field:
-                entry = {
-                    "name": field.group(1),
-                    "type": parse_type(field.group(2)),
-                    "doc": "\n".join(docs),
-                }
-                (topics if topic_pending else data).append(entry)
-                topic_pending = False
-            docs = []
+            entry = {
+                "name": field.group(1),
+                "type": parse_type(field.group(2)),
+                "doc": extract_docs(attrs),
+            }
+            is_topic = any(
+                line.strip() == "#[topic]" for line in attrs.splitlines()
+            )
+            (topics if is_topic else data).append(entry)
+        declared = len(re.findall(r"^\s*pub \w+:", block, re.MULTILINE))
+        if declared != len(topics) + len(data):
+            raise ValueError(
+                f"event `{name}`: parsed {len(topics) + len(data)} of {declared} fields"
+            )
         events.append(
             {
                 "name": name,
@@ -536,16 +639,8 @@ def parse_events(source: str) -> list[dict]:
 def _contract_type(
     lines: list[str], line_index: int, attribute: str = "#[contracttype]"
 ) -> bool:
-    index = line_index - 1
-    while index >= 0:
-        stripped = lines[index].strip()
-        if stripped.startswith(attribute):
-            return True
-        if stripped.startswith("///") or stripped.startswith("#["):
-            index -= 1
-            continue
-        return False
-    return False
+    attrs = attrs_before(lines, line_index)
+    return any(line.strip().startswith(attribute) for line in attrs.splitlines())
 
 
 def parse_errors(source: str) -> list[dict]:
@@ -621,26 +716,29 @@ def parse_contract() -> dict:
     lib = (CONTRACT / "lib.rs").read_text()
     # Types may be declared in lib.rs itself (StreamInput) as well as in the
     # domain modules; constants live only in the modules.
-    sources = {name: (CONTRACT / f"{name}.rs").read_text() for name in MODULES}
+    sources = {
+        name: (CONTRACT / f"{name}.rs").read_text() for name in contract_modules(lib)
+    }
     type_sources = {"lib": lib, **sources}
     events_source = (CONTRACT / "events.rs").read_text()
     errors_source = (CONTRACT / "errors.rs").read_text()
 
     functions = parse_functions(lib)
-    structs, enums = parse_structs_and_enums(type_sources)
+    structs, enums, unions = parse_structs_and_enums(type_sources)
     events = parse_events(events_source)
     errors = parse_errors(errors_source)
     constants = parse_constants(sources)
 
-    known = {item["name"] for item in structs} | {item["name"] for item in enums}
-    reachable = _reachable_types(functions, events, structs, enums, known)
+    reachable = _reachable_types(functions, events, structs, enums, unions)
     structs = [item for item in structs if item["name"] in reachable]
     enums = [item for item in enums if item["name"] in reachable]
+    unions = [item for item in unions if item["name"] in reachable]
 
     return {
         "functions": functions,
         "structs": structs,
         "enums": enums,
+        "unions": unions,
         "events": events,
         "errors": errors,
         "constants": constants,
@@ -652,10 +750,11 @@ def _reachable_types(
     events: list[dict],
     structs: list[dict],
     enums: list[dict],
-    known: set[str],
+    unions: list[dict],
 ) -> set[str]:
     struct_map = {item["name"]: item for item in structs}
     enum_map = {item["name"]: item for item in enums}
+    union_map = {item["name"]: item for item in unions}
     pending: list[str] = []
 
     for function in functions:
@@ -677,9 +776,15 @@ def _reachable_types(
                 pending.extend(type_names(field["type"]))
         elif name in enum_map:
             reachable.add(name)
-        elif name not in known:
+        elif name in union_map:
+            reachable.add(name)
+            for case in union_map[name]["cases"]:
+                for case_type in case["types"]:
+                    pending.extend(type_names(case_type))
+        else:
+            reason = unmodelled.get(name, "no #[contracttype] definition was found")
             raise ValueError(
-                f"reachable contract type `{name}` is not a modelled struct or unit enum"
+                f"reachable contract type `{name}` is not modelled by the spec IR: {reason}"
             )
     return reachable
 
@@ -708,6 +813,7 @@ def build_spec(contract: dict) -> dict:
         "functions": entrypoints,
         "structs": contract["structs"],
         "enums": contract["enums"],
+        "unions": contract["unions"],
         "events": contract["events"],
     }
 
@@ -761,6 +867,14 @@ def compare(spec: dict, expected: dict) -> list[str]:
             "enum",
             spec.get("enums", []),
             expected["enums"],
+            ("encoding", "cases"),
+        )
+    )
+    problems.extend(
+        _compare_named(
+            "union",
+            spec.get("unions", []),
+            expected["unions"],
             ("cases",),
         )
     )
@@ -834,6 +948,7 @@ def main() -> int:
         print(
             f"spec written: {len(expected['functions'])} operations, "
             f"{len(expected['structs'])} structs, {len(expected['enums'])} enums, "
+            f"{len(expected['unions'])} unions, "
             f"{len(expected['events'])} events, sha256 {digest[:12]}…"
         )
         return 0

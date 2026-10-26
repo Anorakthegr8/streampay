@@ -10,8 +10,11 @@
   `#[contractimpl]` block: name, documentation, ordered arguments (names + IR
   types), return type, whether the call is fallible (`error`), and whether it
   mutates state
-* `structs` / `enums` — the `#[contracttype]` types reachable from entrypoints
-  or events
+* `structs` / `enums` / `unions` — the `#[contracttype]` types reachable from
+  entrypoints or events. `enums` are all-unit enums with their wire
+  `encoding`: `symbol` (no discriminants; Soroban encodes `Vec[Symbol(case)]`)
+  or `u32` (every case has `= N`). `unions` are enums whose cases carry tuple
+  payloads, encoded `Vec[Symbol(case), payload…]`, cases in declaration order
 * `events` — event name, topic symbol, topic fields, data fields (the layout
   `#[contractevent]` emits: `[symbol(topic), topic fields…]` plus a
   symbol-keyed data map)
@@ -23,19 +26,18 @@ client can invoke on a deployed contract. The coverage tests check every other
 
 IR types are a small language:
 
-| IR | Rust | TypeScript |
-|---|---|---|
-| `address` | `Address` / `MuxedAddress` | `string` |
-| `bool` | `bool` | `boolean` |
-| `i128`, `u128`, `u64` | same | `bigint` |
-| `u32`, `i32` | same | `number` |
-| `string`, `symbol` | `String`, `Symbol` | `string` |
-| `bytes32`, `bytes64` | `BytesN<32>`, `BytesN<64>` | `Uint8Array` |
-| `{ "vec": T }` | `Vec<T>` | `T[]` |
-| `{ "option": T }` | `Option<T>` | `T \| null` |
-| `{ "result": { "ok": T, "err": E } }` | `Result<T, E>` | `{ ok: T } \| { error: E }` |
-| `void` | `()` | `void` |
-| `Name` | a contract struct/enum | generated interface/union |
+| IR | Rust |
+|---|---|
+| `address` | `Address` / `MuxedAddress` |
+| `bool` | `bool` |
+| `i128`, `u128`, `u64`, `u32`, `i32` | same |
+| `string`, `symbol` | `String`, `Symbol` |
+| `bytes32`, `bytes64` | `BytesN<32>`, `BytesN<64>` |
+| `{ "vec": T }` | `Vec<T>` |
+| `{ "option": T }` | `Option<T>` |
+| `{ "result": { "ok": T, "err": E } }` | `Result<T, E>` |
+| `void` | `()` |
+| `Name` | a contract struct / enum / payload enum | language-specific (see each SDK) |
 
 Error names and codes are **not** in the spec. `generate.py` reads the canonical
 catalog (`frontend/lib/errors.ts`), which is generated from `errors.rs` and
@@ -47,8 +49,13 @@ gated separately, so there is exactly one error registry in the repository.
 run and fails when the checked-in spec differs. The companion tests
 (`sdks/generator/test_contract_surface.py`) fail when:
 
-* an entrypoint exists in the contract but not the spec;
+* an entrypoint exists in the contract but not the spec (the spec's operation
+  set is smaller than the contract's), or the other way round;
 * an entrypoint named by `surface.rs`'s branch registry is missing;
+* the parser misses any `pub fn` in the `#[contractimpl]` block, including
+  `__constructor`;
+* an event or event-referenced type disagrees with
+  `schemas/events/registry.json`;
 * a struct/enum/event/constant drifts;
 * the spec is not byte-for-byte what `--write-spec` emits;
 * `FINGERPRINT` does not match the canonical JSON.
@@ -58,13 +65,10 @@ run and fails when the checked-in spec differs. The companion tests
 1. Update the contract and its tests.
 2. Regenerate the spec and fingerprint:
    `python3 sdks/generator/check_contract_surface.py --write-spec`.
-3. Regenerate the clients: `make -C sdks generate` (installs nothing; needs
-   Python 3.12).
-4. Rebuild the vectors if the wire shape changed: `make -C sdks vectors`.
-5. Run `make -C sdks check test`.
-
-Removing or renaming anything is a breaking contract change; bump the SDK
-minor/major version per [`../README.md`](../README.md#versioning-policy).
+3. Regenerate any language clients present: `make -C sdks generate`
+   (Python 3.12, stdlib only).
+4. Rebuild the vectors (they embed the spec fingerprint): `make -C sdks vectors`.
+5. Run `make -C sdks check`.
 
 ## Provenance
 
