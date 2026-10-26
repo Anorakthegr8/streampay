@@ -489,12 +489,9 @@ pub fn sponsored_withdraw(
     let operator_key =
         get_operator_key(&env, &sponsor).ok_or_else(|| surface::reject(Branch::SponsorNotFound))?;
 
-    // --- stream: open, matches the sponsor's token, pays this beneficiary --
+    // --- stream: live, matches the sponsor's token, pays this beneficiary --
     let mut s = stream::get_stream(&env, stream_id)?;
-    if (s.status != StreamStatus::Active && s.status != StreamStatus::Paused)
-        || s.token != cfg.token
-        || beneficiary != s.recipient
-    {
+    if s.status != StreamStatus::Active || s.token != cfg.token || beneficiary != s.recipient {
         return Err(surface::reject(Branch::StreamNotActive));
     }
 
@@ -502,7 +499,7 @@ pub fn sponsored_withdraw(
     if amount <= 0 {
         return Err(surface::reject(Branch::SponsoredWithdrawAmountNonPositive));
     }
-    let resolved = crate::oracle::resolve_stream_time(&env, stream_id, s.use_oracle);
+    let resolved = crate::oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
     let available = stream::available_amount_with_plan(&env, &s, resolved.timestamp)?;
     if amount > available {
         return Err(surface::reject(

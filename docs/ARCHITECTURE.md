@@ -23,8 +23,7 @@ reentrancy, TTL strategy, and the design decisions behind the v1 API. Read the
 │  lib.rs      entrypoints: create_stream(s) / withdraw / withdraw_max /│
 │  lib.rs      entrypoints: create_stream / create_streams /          │
 │              create_streams_batch / withdraw / withdraw_max /       │
-│              cancel_stream / pause_stream / resume_stream / top_up /│
-│              get_stream / available /                              │
+│              cancel_stream / top_up / get_stream / available /      │
 │              recipient_streams / sender_streams / schedule_stream / │
 │              execute_scheduled / cancel_scheduled / reclaim_expired │
 │              set_fee_bps / nominate_governor / accept_governor /    │
@@ -61,9 +60,9 @@ reentrancy, TTL strategy, and the design decisions behind the v1 API. Read the
 | Key | Value | Purpose |
 |---|---|---|
 | `DataKey::NextStreamId` | `u64` | monotonic id counter (ids start at 1) |
-| `DataKey::Stream(id)` | `Stream` | full per-stream state, including pause accounting |
+| `DataKey::Stream(id)` | `VersionedStream` | tagged envelope (`{ version, stream }`) holding the full per-stream state; a legacy untagged `Stream` map still decodes as v1 (see [`UPGRADES.md`](./UPGRADES.md)) |
 | `DataKey::RecipientStreams(addr)` | `Vec<u64>` | append-only ids where `addr` receives |
-| `DataKey::SenderStreams(addr)` | `Vec<u64>` | append-only ids created by `addr` |
+| `DataKey::SenderStreams(addr)` | `Vec<u64>` | ids `addr` currently pays: append-only, except that a consented sender-role transfer prunes the outgoing holder's entry (§19) |
 | `DataKey::NextIntentId` | `u64` | monotonic scheduled-intent id counter |
 | `DataKey::Intent(id)` | `ScheduledIntent` | full per-intent state (escrow, timing, `params_hash`) |
 | `DataKey::SenderIntents(addr)` | `Vec<u64>` | append-only intent ids scheduled by `addr` |
@@ -77,6 +76,9 @@ reentrancy, TTL strategy, and the design decisions behind the v1 API. Read the
 | `DataKey::PendingOwnership(id)` | `PendingOwnership` | at most one unexpired role-proposal per stream |
 | `DataKey::PendingRateChange(id)` | `PendingRateChange` | at most one unexpired rate-proposal per stream; absent = no offer |
 | `DataKey::RateSegments(id)` | `Vec<RateSegment>` | accepted rate schedule, ≤ `MAX_RATE_SEGMENTS` windows; absent = never renegotiated |
+| `DataKey::PendingSenderTransfer(id)` | `PendingSenderTransfer` | at most one unexpired sender-role proposal per stream |
+| `DataKey::SenderHistory(id)` | `SenderHistory` | append-only log: sender at creation + every consented hop |
+| `DataKey::RefundTarget(id)` | `Address` | who owns the cancellation remainder; absent = the current `sender`; re-pointable by the sender (§20) |
 
 Streams live in **persistent** storage. Every mutating entrypoint that touches
 a stream extends its TTL (`TTL_THRESHOLD_LEDGERS = 200_000`, extend to
@@ -142,10 +144,6 @@ A gas optimization evaluation (`contracts/streaming-payments/examples/storage_be
 3. **Double-Read & Host Resolution Elimination:** The contract avoids double reads in `withdraw`: `authorize_withdrawal` loads `s` once and passes `&mut s` directly to `pay_out`. In `pull` and `cancel_stream`, `env.current_contract_address()` is resolved once and cached across transfers, saving 548 CPU instructions and 80 memory bytes.
 4. **Native Index Slicing:** In `page_stream_ids`, pagination utilizes native `ids.slice(start..end)`, eliminating manual looping and intermediate allocation overhead.
 
-Pause-aware streams retain the monolithic `DataKey::Stream(u64)` layout.
-`get_stream` decodes the stored value fallibly against the current and legacy
-shapes, preserving records created before oracle time or pause accounting was
-added; the next write persists the current shape without a per-stream marker.
 
 
 ## 3. Accrual math
@@ -155,24 +153,6 @@ Everything reduces to one pure function (`stream.rs`):
 ```rust
 streamed_at(deposit: i128, duration: u64, elapsed: u64) -> Result<i128, StreamError>
 ```
-
-For a stream with pauses, `elapsed` is active time rather than wall-clock
-time:
-
-```text
-elapsed = effective_now − start_time − paused_total
-```
-
-`effective_now` is the resolved stream time (oracle time when configured,
-otherwise ledger time) while Active and `last_resumed_at` while Paused (which
-records the pause boundary until resume). `paused_total` contains completed
-pause intervals; on resume, the current pause interval is added to it and
-`end_time` is shifted by the same number of seconds. Thus
-`end_time − start_time − paused_total` remains the original accrual duration,
-the rate does not change, and the stream's effective end shifts by exactly the
-paused interval. While Paused, elapsed time stops changing, so withdrawals
-remain bounded by the frozen accrued balance. Top-ups remain permitted and
-retain the existing pro-rata deposit semantics.
 
 - `elapsed == 0` (before `start_time`) → `0`
 - `elapsed >= duration` (at/after `end_time`) → `deposit`
@@ -251,14 +231,16 @@ streamed_amount_at_segments(stream, now, segments)
 | `create_streams` | anyone; `sender` must authorize once for the batch | sender |
 | `withdraw` | recipient only | recipient |
 | `cancel_stream` | sender always; recipient iff `cancelable` | caller |
-| `pause_stream` / `resume_stream` | sender only | sender |
-| `top_up` | sender only, while Active or Paused | sender |
+| `top_up` | sender only | sender |
 | `propose_ownership_transfer` | current sender or recipient | caller |
 | `accept_ownership_transfer` | named pending `new_owner` only | new owner |
 | `cancel_ownership_transfer` | pending proposer only | proposer |
 | `propose_rate_change` | current sender or recipient | caller |
 | `accept_rate_change` | the offer's named counterparty only; an increase additionally consumes the sender's auth, since funds move from them | counterparty (+ sender on an increase) |
 | `cancel_rate_change` | pending proposer only | proposer |
+| `propose_sender_transfer` | the stream's current sender only | caller (the outgoing sender) |
+| `accept_sender_transfer` | the stream's recipient only, with the stored nonce | recipient |
+| `expire_sender_transfer` | anyone, after the proposal window | none |
 | `schedule_stream` | anyone; `sender` must authorize | sender |
 | `execute_scheduled` | anyone (keeper) | keeper (the caller) |
 | `cancel_scheduled` | intent sender, before the window opens | sender |
@@ -364,23 +346,13 @@ this exact equality after every operation
                  │
                  ├─ withdrawn == deposit ──▶ Depleted (terminal)
                  │
-                 ├─ pause_stream ──────────▶ Paused
-                 │                             │
-                 │                             ├─ resume_stream ─▶ Active
-                 │                             ├─ withdraw/top_up
-                 │                             └─ cancel_stream ─▶ Cancelled
-                 │
-                 └─ top_up allowed while Active (even after effective
-                    end_time: funds become fully accrued → recipient withdraws)
+                 └─ top_up allowed while Active (even after end_time:
+                    funds become fully accrued → recipient withdraws)
 ```
 
 - Cancelling a `Depleted` stream reverts (`StreamNotActive`) — there is
   nothing left to split.
 - Cancelling a not-yet-started stream is a 100 % refund to the sender.
-- While `Paused`, accrual is frozen at the pause-time balance; `withdraw`,
-  `top_up`, and `cancel_stream` remain available.
-- `pause_stream` on any non-Active stream and `resume_stream` on any
-  non-Paused stream revert (`StreamNotActive`).
 - `top_up` on a cancelled/depleted stream reverts.
 - Ownership transfers are proposed and accepted only on `Active` streams; a
   pending proposal for a stream that later becomes terminal can never move a
@@ -484,13 +456,28 @@ the public interface:
 | 61 | `OwnershipProposalExpired` | accept after the proposal's seven-day window |
 | 62 | `InvalidTransferTarget` | proposing to the role's current holder |
 | 63 | `OwnershipProposalPending` | proposing while an unexpired proposal exists |
-| 80 | `NoPendingRateChange` | accept/cancel called with no rate offer stored |
-| 81 | `RateProposalExpired` | accept after the offer's seven-day window |
-| 82 | `RateProposalPending` | proposing while an unexpired offer exists |
-| 83 | `TooManyRateSegments` | acceptance would exceed `MAX_RATE_SEGMENTS` (32) windows; the offer survives |
+| 83 | `NoPendingRateChange` | accept/cancel called with no rate offer stored |
+| 84 | `RateProposalExpired` | accept after the offer's seven-day window |
+| 85 | `RateProposalPending` | proposing while an unexpired offer exists |
+| 86 | `TooManyRateSegments` | acceptance would exceed `MAX_RATE_SEGMENTS` (32) windows; the offer survives |
+| 87 | `SchemaVersionUnsupported` | a stored stream record decodes as neither known layout, or names a version this build cannot read |
+| 88 | `SenderTransferNotFound` | `accept_sender_transfer` / `expire_sender_transfer` with no proposal stored |
+| 89 | `SenderTransferExpired` | consent after the proposal's seven-day window |
+| 90 | `SenderTransferNotExpired` | `expire_sender_transfer` while the window is still open |
+| 91 | `SenderTransferNonceMismatch` | consent presenting a nonce that is not the stored proposal's |
+| 92 | `SenderTransferPending` | proposing while an unexpired sender-transfer proposal exists |
+| 93 | `SenderTransferNotConsenter` | anyone but the stream's recipient executing a sender transfer |
+| 94 | `RefundTargetNotSender` | refund routing attempted by a caller who no longer holds the sender role |
+| 95 | `RefundTargetUnchanged` | routing to the address that already holds the refund claim |
+| 96 | `WithdrawBatchEmpty` | `withdraw_many` with an empty stream list |
+| 97 | `WithdrawBatchTooLarge` | `withdraw_many` with more than `MAX_WITHDRAW_BATCH` (20) ids |
+| 98 | `WithdrawDuplicateStreamIds` | `withdraw_many` with a repeated id |
 
-Codes 31–59 (policy, upgrades, batch limits, sponsorship, and oracle) and the
-two-key governance codes 64–79 are catalogued in [`docs/errors.md`](./errors.md).
+Codes 31–59 (policy, upgrades, batch limits, sponsorship, and oracle), the
+two-key governance codes 64–79 and the dispute codes 80–82 are catalogued in
+[`docs/errors.md`](./errors.md). 87 is the storage-versioning tail
+([`UPGRADES.md`](./UPGRADES.md)); 88–93 are the sender-transfer surface (§19),
+94–95 the refund-routing surface (§20) and 96–98 the `withdraw_many` bounds.
 
 Codes 26–30 are *transfer-failure* codes: a token's own error number is
 deliberately never propagated (see §5), so clients can always branch on these
@@ -666,8 +653,11 @@ griefing) is in [`SCHEDULED_INTENTS.md`](./SCHEDULED_INTENTS.md).
   dead and no branch uncoded. `docs/ERROR_SURFACE.md` is generated from the same table
   and diffed in CI.
 - **`withdraw_max`** shares the `withdraw` payout tail (`pay_out`) so both
-  paths inherit the same CEI ordering and reentrancy proof; index pagination
-  and TTL behavior have dedicated tests in `test.rs`.
+  paths inherit the same CEI ordering and reentrancy proof; `withdraw_many`
+  (#205) runs that same tail once per requested id, so a batch claim differs
+  from twenty single claims only in its per-transaction overhead, never in
+  accrual math or event shape. Index pagination and TTL behavior have dedicated
+  tests in `test.rs`.
 - **Ownership transfer** tests cover propose → accept for both roles,
   propose → cancel → re-propose, expiry at the exact seven-day boundary
   (including lazy replacement and explicit cancellation), rejection of
@@ -735,6 +725,8 @@ griefing) is in [`SCHEDULED_INTENTS.md`](./SCHEDULED_INTENTS.md).
 
 ## 10. Open problems / roadmap hooks
 
+- `pause_stream` (sender-initiated temporary hold) — needs a fourth status and
+  careful `cancel_amounts` treatment; drafted as a good-first-issue.
 - Multi-token batch creation — one tx, N streams; watch the instruction
   budget, likely `try_create_batch` with per-item results.
 - Gas optimization pass on storage reads — `cancel_stream` does one
@@ -1076,14 +1068,6 @@ a new struct and migrate/cross-read deliberately, rather than editing the
 existing type. `StreamStatus` is name-encoded like `DataKey`, but is nested
 inside stored `Stream` values — same practical freeze.
 
-The pause fields are introduced as schema v3: `get_stream` cross-reads the v2
-shape (`LegacyStream`) and supplies zero paused time, while the governor's
-bounded `migrate_storage` calls rewrite entries in the v3 shape. A per-stream
-format marker distinguishes new entries from legacy entries (which cannot be
-decoded as the expanded struct); both marker and stream entry have their TTL
-extended on writes. The legacy decoder remains available during a partially
-completed migration.
-
 ### 13.3 Event shapes
 
 Events are the off-chain ledger indexers consume; fields decode by position
@@ -1093,14 +1077,17 @@ Events are the off-chain ledger indexers consume; fields decode by position
 |---|---|---|
 | `StreamCreated` | `stream_id: u64` | `sender`, `recipient`, `token: Address`; `deposit: i128`; `start_time`, `end_time: u64`; `cancelable: bool` |
 | `Withdrawn` | `stream_id: u64` | `recipient: Address`; `amount: i128`; `withdrawn_total: i128` |
+| `BatchWithdrawSummary` | `recipient: Address` | `settled: Vec<WithdrawOutcome>` (each `stream_id: u64`; `amount: i128`); `total: i128`; `requested: u32`; `skipped: u32` |
 | `StreamCancelled` | `stream_id: u64` | `cancelled_by: Address`; `recipient_amount: i128`; `sender_amount: i128` |
 | `StreamToppedUp` | `stream_id: u64` | `sender: Address`; `amount: i128`; `new_deposit: i128` |
-| `PauseStream` | `stream_id: u64` | — |
-| `ResumeStream` | `stream_id: u64` | — |
 | `FeeCharged` | `stream_id: u64` | `token: Address`; `payer: Address`; `amount: i128`; `fee_bps: u32` |
 | `FeeWithdrawn` | `token: Address` | `governor: Address`; `recipient: Address`; `amount: i128`; `withdrawn_total: i128` |
 | `RateChangeProposed` | `stream_id: u64` | `proposed_by`, `counterparty: Address`; `amount_per_second: i128`; `expires_at: u64` |
 | `RateChangeAccepted` | `stream_id: u64` | `accepted_by: Address`; `new_amount_per_second`, `owed_at_change`, `reserved_at_new_rate`, `adjustment`, `deposit: i128`; `effective_from: u64` |
+| `SenderTransferProposed` | `stream_id: u64` | `sender_from: Address`; `new_sender: Address`; `nonce: u64`; `expires_at: u64`; `transfer_refund_rights: bool` |
+| `SenderTransferred` | `stream_id: u64` | `sender_from: Address`; `sender_to: Address`; `nonce: u64`; `refund_rights_transferred: bool` |
+| `SenderTransferExpired` | `stream_id: u64` | `sender_from: Address`; `new_sender: Address`; `nonce: u64` |
+| `StreamRefundTargetChanged` | `stream_id: u64` | `previous_target: Address`; `new_target: Address`; `at_creation: bool` |
 
 Never add, remove, reorder, or retype fields of an existing event; emit a
 new event type instead. Tests must filter by contract and compare typed XDR
@@ -1244,7 +1231,7 @@ StreamPay supports an optional external oracle reference clock (`create_stream_w
 
 ### Trust & Threat Model
 
-- **Opt-In Per Stream**: Ledger time remains the default clock. Oracle resolution is strictly opt-in per stream (`use_oracle: bool`), preventing unexpected feed dependency for standard streams.
+- **Opt-In Per Stream**: Ledger time remains the default clock. Oracle resolution is strictly opt-in per stream (`use_oracle` flag on the persisted `Stream`), preventing unexpected feed dependency for standard streams. Streams written before the oracle clock existed carry no `use_oracle` key on the wire at all; the field is optional in Rust so those records keep decoding, and an absent flag reads as ledger time. The v1→v2 storage migration backfills the key to `false`.
 - **Governor-Managed Publisher Registry**: The protocol governor configures authorized publishers and threshold requirements (`set_oracle_config`).
 - **M-of-N Quorum Protection**: An M-of-N quorum scheme (e.g. 2-of-3) prevents any single compromised or rogue publisher from shifting reference time. Quorum aggregation uses the median of valid publisher reports, which eliminates outliers.
 - **Staleness Bounds (`max_stale_seconds`)**: Each publisher submission records `(reported_time, ledger_time)`. A report is deemed valid if and only if `current_ledger_time <= report.ledger_time + max_stale_seconds`. Older reports are automatically discarded. Future timestamps exceeding `current_ledger_time + max_stale_seconds` are rejected on submission (`StreamError::OracleReportTooOld`).
@@ -1313,7 +1300,8 @@ every accounting field is definitionally unchanged, so for all `t`:
    possible because both recipients read and write the same `withdrawn`
    counter. Sender transfer redirects future top-up pulls and cancellation
    refunds; cancellation still splits `streamed − withdrawn` to the recipient
-   and `deposit − streamed` to the current sender.
+   and `deposit − streamed` to the refund target, which is the current sender
+   unless §19 pinned it elsewhere.
 4. **Terminal safety.** Transfer is limited to `Active` streams, so a
    cancelled/depleted stream can never acquire a new claimant or payer.
 
@@ -1409,3 +1397,133 @@ cancellation, stale parties after an ownership transfer (§17), the frozen gate,
 the segment cap, and the empty-schedule differential against the pre-#54
 formula. §3.1 covers the math; the rounding analysis across random schedules is
 §9.
+## 19. Consented sender-role transfer
+
+§17 moves a role to the address that will hold it, so that address consents. A
+**sender-role transfer** is the other case: the payer changes, and the party
+losing a counterparty is the recipient — so the *recipient* consents, and the
+proposal is nonce-bound so a consent can only name one proposal.
+
+```text
+propose_sender_transfer(caller, id, new_sender, nonce, transfer_refund_rights)
+    caller must be the current sender; stream must be Active
+    new_sender must be neither the sender nor the recipient
+    stores PendingSenderTransfer { stream_id, sender_from, new_sender, nonce,
+                                   expires_at, transfer_refund_rights }
+    emits SenderTransferProposed
+        │
+        ├─ accept_sender_transfer(recipient, id, nonce)
+        │     caller must equal stream.recipient   → SenderTransferNotConsenter (93)
+        │     nonce must equal the stored one       → SenderTransferNonceMismatch (91)
+        │     window must still be open             → SenderTransferExpired (89)
+        │     role moves: sender := new_sender
+        │     both SenderStreams pages rewritten and TTL-extended
+        │     RefundTarget := new_sender if transfer_refund_rights,
+        │                      else the claim as it stood before the hop
+        │     SenderHistory gains one immutable record
+        │     pending key removed, emits SenderTransferred
+        │
+        └─ expire_sender_transfer(id)  — after the window, permissionless
+              returns the reclaimed nonce, emits SenderTransferExpired
+              refuses while the proposal is live → SenderTransferNotExpired (90)
+```
+
+**Why the claim is explicit.** `deposit` funds a stream, and the unaccrued
+remainder is whoever paid's money. A role hop changes who may top up and who
+may cancel; it does not change who funded it. So `transfer_refund_rights` is a
+separate field on the proposal rather than a consequence of the hop, and
+`DataKey::RefundTarget(id)` records the answer permanently: `refund_target()`
+falls back to `stream.sender` when the key is absent, and `apply_sender_transfer`
+pins the key on every hop — to the incoming sender only when the proposal asked
+for it. A chain `A → B → C` with no flag set therefore still pays A, which is
+the property the append-only log exists to make auditable.
+
+**Index migration.** Both sides of the hop are rewritten with the same helpers
+the creation path uses (`index_sender` appends through `push_to_index`,
+`unindex_sender` prunes through `remove_from_index`), so a page cannot be
+extended on one side and left to go cold on the other. The prune preserves the
+order of the remaining ids. `RecipientStreams` is untouched: the recipient did
+not change. Unlike §17's append-only index rule, the outgoing sender's page
+stops listing the stream — the point of the feature is that nobody discovers a
+stream under an address that no longer controls it.
+
+**Storage and accounting.** Nothing about a hop moves a token: the effects are
+`Stream`, `SenderStreams` (both pages), `RefundTarget` and `SenderHistory`
+writes plus the removal of the proposal key, which is exactly the trace pinned
+by `test_orderings/sender_transfer.txt`. `deposit`, `withdrawn`, `token`,
+`start_time`, `end_time` and `status` are untouched, so §17's invariance proof
+applies unchanged. Cost and growth are documented in
+[`FOOTPRINT.md`](./FOOTPRINT.md) (Candidate 6).
+
+## 20. Refund routing
+
+§19 established that the refund of the unstreamed remainder is a *claim*, not a
+consequence of a role. `DataKey::RefundTarget(id)` was written only as a
+side-effect of a hop. **Refund routing** makes that claim directly addressable:
+the sender-role holder can name the destination at creation, or amend it later,
+without anyone's counterparty's consent — because routing money to an address
+can only ever *give*, and the party who funded the deposit is the party entitled
+to decide where it returns.
+
+```text
+create_stream_with_refund(…, refund_to)
+      frozen                                  → ContractFrozen (36)
+      refund_to == sender                     → RefundTargetUnchanged (95)
+      then the ordinary create_stream_with_oracle checks and validation
+      writes RefundTarget(id) = refund_to on top of the fresh record
+      emits StreamCreated, then StreamRefundTargetChanged { at_creation: true }
+
+set_refund_target(caller, id, refund_to)
+      caller.require_auth()
+      frozen                                  → ContractFrozen (36)
+      stream must exist                       → StreamNotFound (1)
+      status must be Active                   → StreamNotActive (5)
+      caller must hold the sender role        → RefundTargetNotSender (94)
+      target must differ from the claim       → RefundTargetUnchanged (95)
+      overwrites RefundTarget(id); emits StreamRefundTargetChanged
+```
+
+The rejection order is deliberate and is what `error_surface_test.rs` probes:
+authorization before existence-checking would leak which ids exist to a caller
+the contract is about to refuse anyway, while `StreamNotActive` before
+`RefundTargetNotSender` keeps a stranger from learning a finished stream's
+state through an error that names them.
+
+**What routing does not do.** It grants no authority — the routed address can
+still neither cancel, top up, pause nor withdraw, and only the sender-role
+holder can move the routing again (so after a hop the outgoing sender loses the
+amendment right, which `a_routed_refund_pays_the_designated_address_and_nobody_else`
+and `only_the_current_sender_can_re_route_the_refund` hold). It does
+not touch the accrual math: `available`, `streamed`, and the split
+`cancel_amounts` computes are functions of `deposit`, `withdrawn` and the time
+window only, so a routed stream and an unrouted twin produce records that are
+equal field-for-field with different destinations for the same remainder. That
+is the property `routing_never_touches_the_accrual_math` asserts by *record
+equality*, which is stronger than asserting equal numbers: it proves the routing
+is not in the record at all.
+
+**Composition with §19.** `apply_sender_transfer` pins `RefundTarget` on every
+hop — to the incoming sender when the proposal set `transfer_refund_rights`,
+otherwise to whatever the claim already was. A routing therefore survives a hop
+that does not move rights, and is replaced by a hop that does; the last write
+wins, which is the order the parties acted in. Both orders are exercised in
+`routing_and_sender_transfers_compose_in_the_order_thappen` — see the four-cell
+interaction matrix it builds. One trap follows from this and is documented on the
+entrypoint rather than discovered in production: routing the claim to a fixed
+address, then letting a *different* sender top the stream up, means the pinned
+address drains the enlarged pot. The amendment is a destination, not a budget.
+
+**Storage.** Routing writes one key per stream, overwritten by every amendment,
+so growth is bounded by the number of streams that ever route rather than the
+number of amendments (`docs/FOOTPRINT.md`, Candidate 6). A terminal stream has no
+remainder to route: `set_refund_target` refuses with `StreamNotActive`, while the
+`refund_target` view keeps answering — the destination of a paid-out refund is
+audit information, not live state.
+
+**Off-chain.** The indexer projects `stream_refund_target_changed` into
+`streams.refund_target` (NULL = unrouted, i.e. the sender is paid) under the same
+monotonic-projection rule as the rest of the row, and the routing never enters
+`listAddress`: a routed address holds a claim, not a discoverable role. The
+stream detail page reads the `refund_target` view and warns when the answer
+differs from the sender, which is the only signal the contract gives — the view
+resolves the fallback rather than reporting an absent key.

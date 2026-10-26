@@ -343,7 +343,7 @@ fuzz_target!(|campaign: ConservationCampaign| {
         // Invariant 1: For every active stream, deposit == withdrawn + available + refundable
         for &stream_id in &created_stream_ids {
             if let Ok(Ok(stream)) = client.try_get_stream(&stream_id) {
-                if stream.status == StreamStatus::Active || stream.status == StreamStatus::Paused {
+                if stream.status == StreamStatus::Active {
                     let avail = client.available(&stream_id);
                     assert!(
                         avail >= 0,
@@ -379,10 +379,7 @@ fuzz_target!(|campaign: ConservationCampaign| {
             let mut active_escrows: i128 = 0;
             for &stream_id in &created_stream_ids {
                 if let Ok(Ok(stream)) = client.try_get_stream(&stream_id) {
-                    if (stream.status == StreamStatus::Active
-                        || stream.status == StreamStatus::Paused)
-                        && stream.token == *token
-                    {
+                    if stream.status == StreamStatus::Active && stream.token == *token {
                         active_escrows += stream.deposit - stream.withdrawn;
                     }
                 }

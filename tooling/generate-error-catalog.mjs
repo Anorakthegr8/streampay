@@ -372,16 +372,6 @@ const ERROR_METADATA = {
     toastClass: 'error',
     retryable: false,
   },
-  80: {
-    remediation: 'Only the stream sender can pause it. Connect the sender wallet and retry.',
-    toastClass: 'error',
-    retryable: false,
-  },
-  81: {
-    remediation: 'Only the stream sender can resume it. Connect the sender wallet and retry.',
-    toastClass: 'error',
-    retryable: false,
-  },
 };
 
 // Ensure directories exist
