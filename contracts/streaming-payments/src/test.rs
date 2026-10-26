@@ -353,6 +353,27 @@ fn top_up_then_withdraw_operation_order_matches_golden() {
     );
 }
 
+#[test]
+fn pause_resume_operation_order_matches_golden() {
+    let f = Fixture::setup_quiet();
+    let id = f.create_stream(DEPOSIT, 0, 10 * DAY, false);
+    f.advance_time(DAY);
+
+    // Pause, then resume a day later so the resume leg shifts the window and
+    // rewrites the stream: every state write lands before its event, and
+    // neither leg moves tokens.
+    crate::cei_trace::begin();
+    f.client.mock_all_auths().pause_stream(&f.sender, &id);
+    f.advance_time(DAY);
+    f.client.mock_all_auths().resume_stream(&f.sender, &id);
+    let actual = crate::cei_trace::finish();
+
+    assert_eq!(
+        actual,
+        include_str!("../test_orderings/pause_resume.txt").trim_end()
+    );
+}
+
 // ------------------------------------------------------------ creation ------
 
 #[test]
@@ -5586,6 +5607,8 @@ fn hot_path_footprint_harness() {
     // every accrual path pays one extra persistent lookup even for a stream that
     // never renegotiated. The cheaper alternative, a "has a schedule" flag,
     // would mean a new `Stream` field: a layout change for every stored stream.
+    // Pause/resume (#24) does the same with its `StreamPause` key: one more
+    // persistent lookup per accrual read, instead of new `Stream` fields.
     // See docs/FOOTPRINT.md.
     fn measured(label: &str, cpu: u64, mem: u64) {
         std::println!("FOOTPRINT: path={label} cpu={cpu} mem={mem}");
@@ -5614,7 +5637,7 @@ fn hot_path_footprint_harness() {
     let mem_withdraw = f.env.cost_estimate().budget().memory_bytes_cost();
     measured("withdraw", cpu_withdraw, mem_withdraw);
     assert!(
-        cpu_withdraw <= 380_000,
+        cpu_withdraw <= 398_000,
         "withdraw exceeded budget: {}",
         cpu_withdraw
     );
@@ -5635,8 +5658,8 @@ fn hot_path_footprint_harness() {
         // 540k pre-dispute; the freeze check adds one dispute-key storage lookup,
         // the merged rate-renegotiation code path another ~3K of hot-path
         // instructions through shared validation helpers, and the routed refund
-        // one more persistent-key read.
-        cpu_cancel <= 600_000,
+        // one more persistent-key read; the pause side-key check (#24) another.
+        cpu_cancel <= 620_000,
         "cancel_stream exceeded budget: {}",
         cpu_cancel
     );
@@ -5650,7 +5673,7 @@ fn hot_path_footprint_harness() {
     let mem_withdraw_max = f.env.cost_estimate().budget().memory_bytes_cost();
     measured("withdraw_max", cpu_withdraw_max, mem_withdraw_max);
     assert!(
-        cpu_withdraw_max <= 385_000,
+        cpu_withdraw_max <= 402_000,
         "withdraw_max exceeded budget: {}",
         cpu_withdraw_max
     );
@@ -5670,7 +5693,7 @@ fn hot_path_footprint_harness() {
     f.client.mock_all_auths().withdraw(&id3, &(DEPOSIT / 100));
     let cpu_scheduled_withdraw = f.env.cost_estimate().budget().cpu_instruction_cost();
     assert!(
-        cpu_scheduled_withdraw <= 425_000,
+        cpu_scheduled_withdraw <= 458_000,
         "withdraw on a scheduled stream exceeded budget: {}",
         cpu_scheduled_withdraw
     );
@@ -10975,8 +10998,10 @@ fn withdraw_many_footprint_harness() {
     // budget: 20 claims across one asset, plus the summary event. Soroban's
     // per-transaction ceiling is 100M instructions; the cap is held well below
     // it so a full batch leaves room for the caller's own footprint and rent.
+    // 8,000,000 before pause/resume (#24): every entry now also looks up its
+    // `StreamPause` side key (8,422,620 measured, 7,213,732 without it).
     assert!(
-        batch_cpu <= 8_000_000,
+        batch_cpu <= 8_600_000,
         "withdraw_many of {MAX_WITHDRAW_BATCH} streams exceeded budget: {batch_cpu}"
     );
 }
@@ -11312,4 +11337,131 @@ fn pre_oracle_stream_records_decode_and_migrate() {
             "backfilling the flag must not disturb the accounting fields"
         );
     });
+}
+
+// ------------------------------------------------------------ pause / resume
+
+#[test]
+fn pause_freezes_accrual_and_resume_continues_from_the_frozen_point() {
+    let f = Fixture::setup_quiet();
+    let id = f.create_stream(DEPOSIT, 0, 10 * DAY, false);
+    f.advance_time(2 * DAY);
+    let before = f.client.available(&id);
+    assert_eq!(before, DEPOSIT / 5);
+
+    f.client.mock_all_auths().pause_stream(&f.sender, &id);
+    f.advance_time(3 * DAY);
+    assert_eq!(f.client.available(&id), before, "accrual must freeze");
+
+    f.client.mock_all_auths().resume_stream(&f.sender, &id);
+    let s = f.client.get_stream(&id);
+    assert_eq!(s.end_time - s.start_time, 10 * DAY, "rate is unchanged");
+    assert_eq!(f.client.available(&id), before);
+
+    f.advance_time(DAY);
+    assert_eq!(f.client.available(&id), 3 * DEPOSIT / 10);
+
+    // The full deposit still streams, three days later than planned.
+    f.advance_time(7 * DAY);
+    assert_eq!(f.client.available(&id), DEPOSIT);
+}
+
+#[test]
+fn withdraw_and_cancel_while_paused_use_the_frozen_amount() {
+    let f = Fixture::setup_quiet();
+    let id = f.create_stream(DEPOSIT, 0, 10 * DAY, true);
+    f.advance_time(DAY);
+    f.client.mock_all_auths().pause_stream(&f.sender, &id);
+    f.advance_time(DAY);
+    let frozen = DEPOSIT / 10;
+    f.client.mock_all_auths().withdraw(&id, &frozen);
+    let err = f
+        .client
+        .mock_all_auths()
+        .try_withdraw(&id, &1)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, StreamError::AmountExceedsAvailable);
+
+    f.client.mock_all_auths().cancel_stream(&f.sender, &id);
+    let s = f.client.get_stream(&id);
+    assert_eq!(s.withdrawn, frozen);
+}
+
+#[test]
+fn pause_and_resume_follow_the_oracle_clock_on_an_oracle_time_stream() {
+    let f = Fixture::setup_quiet();
+    let publisher = soroban_sdk::Address::generate(&f.env);
+    let mut publishers = soroban_sdk::Vec::new(&f.env);
+    publishers.push_back(publisher.clone());
+    // Wide staleness window: every report below stays fresh, and the
+    // future-timestamp guard admits an oracle clock days ahead of the ledger.
+    let max_stale = 30 * DAY;
+    f.client
+        .mock_all_auths()
+        .set_oracle_config(&f.governor, &publishers, &1, &max_stale);
+
+    let t0 = f.env.ledger().timestamp();
+    let id = f.create_stream_with_oracle(DEPOSIT, 0, 10 * DAY, false, true);
+
+    // The oracle clock runs two days ahead of the ledger; accrual follows it.
+    f.client
+        .mock_all_auths()
+        .submit_oracle_time(&publisher, &(t0 + 2 * DAY));
+    assert!(f.client.mock_all_auths().resolve_time(&id, &true).is_oracle);
+    assert_eq!(f.client.available(&id), DEPOSIT / 5);
+
+    // The freeze point is the oracle time, not the (earlier) ledger time.
+    f.client.mock_all_auths().pause_stream(&f.sender, &id);
+    f.client
+        .mock_all_auths()
+        .submit_oracle_time(&publisher, &(t0 + 5 * DAY));
+    assert_eq!(
+        f.client.available(&id),
+        DEPOSIT / 5,
+        "accrual must freeze while the oracle clock keeps moving"
+    );
+
+    // Resume shifts the window by the paused length measured on the oracle
+    // clock (three days), while the ledger has not moved at all.
+    assert_eq!(f.env.ledger().timestamp(), t0);
+    f.client.mock_all_auths().resume_stream(&f.sender, &id);
+    let s = f.client.get_stream(&id);
+    assert_eq!(s.start_time, t0 + 3 * DAY);
+    assert_eq!(s.end_time, t0 + 13 * DAY);
+    assert_eq!(f.client.available(&id), DEPOSIT / 5);
+
+    // Accrual continues from the frozen amount at the original rate.
+    f.client
+        .mock_all_auths()
+        .submit_oracle_time(&publisher, &(t0 + 6 * DAY));
+    assert_eq!(f.client.available(&id), 3 * DEPOSIT / 10);
+}
+
+#[test]
+fn only_the_sender_pauses_and_double_transitions_are_rejected() {
+    let f = Fixture::setup_quiet();
+    let id = f.create_stream(DEPOSIT, 0, 10 * DAY, false);
+    let err = f
+        .client
+        .mock_all_auths()
+        .try_pause_stream(&f.recipient, &id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, StreamError::NotAuthorized);
+    let err = f
+        .client
+        .mock_all_auths()
+        .try_resume_stream(&f.sender, &id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, StreamError::InvalidPauseTransition);
+    f.client.mock_all_auths().pause_stream(&f.sender, &id);
+    let err = f
+        .client
+        .mock_all_auths()
+        .try_pause_stream(&f.sender, &id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, StreamError::InvalidPauseTransition);
 }

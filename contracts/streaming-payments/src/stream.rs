@@ -984,6 +984,57 @@ pub enum DataKey {
         doc = " untouched streams free of extra storage."
     )]
     RefundTarget(u64),
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Freeze point of a paused stream. Present only while the stream is"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " paused, so accrual for a running stream never depends on this key."
+    )]
+    StreamPause(u64),
+}
+
+/// Freeze point of stream `id` while it is paused; `None` while it streams.
+#[inline(never)]
+pub fn get_paused_at(env: &Env, id: u64) -> Option<u64> {
+    #[cfg(test)]
+    crate::cei_trace::record(&std::format!("read persistent StreamPause({id})"));
+    env.storage().persistent().get(&DataKey::StreamPause(id))
+}
+
+/// Records (`Some`) or clears (`None`) the freeze point of stream `id`.
+pub fn set_paused_at(env: &Env, id: u64, paused_at: Option<u64>) {
+    #[cfg(test)]
+    crate::cei_trace::record(&std::format!(
+        "{} persistent StreamPause({id})",
+        if paused_at.is_some() {
+            "write"
+        } else {
+            "remove"
+        }
+    ));
+    let key = DataKey::StreamPause(id);
+    match paused_at {
+        Some(t) => {
+            env.storage().persistent().set(&key, &t);
+            env.storage()
+                .persistent()
+                .extend_ttl(&key, TTL_THRESHOLD_LEDGERS, TTL_EXTEND_LEDGERS);
+        }
+        None => env.storage().persistent().remove(&key),
+    }
+}
+
+/// The timestamp accrual is evaluated at: `now`, or the freeze point while the
+/// stream is paused. Resuming shifts the window forward by the paused length,
+/// so accrual continues from the frozen amount at the original rate.
+#[inline(never)]
+pub fn accrual_now(env: &Env, id: u64, now: u64) -> u64 {
+    match get_paused_at(env, id) {
+        Some(t) => now.min(t),
+        None => now,
+    }
 }
 
 /// Seconds elapsed of the stream window at the given timestamp `now`.
@@ -1250,7 +1301,10 @@ pub fn cancel_amounts_at(stream: &Stream, now: u64) -> Result<(i128, i128), Stre
 /// The recipient receives their accrued-but-unwithdrawn balance; the sender is
 /// refunded the unaccrued remainder.
 pub fn cancel_amounts(env: &Env, stream: &Stream) -> Result<(i128, i128), StreamError> {
-    cancel_amounts_at(stream, env.ledger().timestamp())
+    cancel_amounts_at(
+        stream,
+        accrual_now(env, stream.id, env.ledger().timestamp()),
+    )
 }
 
 /// Address helper: token transfer destinations are muxed addresses.
@@ -1575,7 +1629,7 @@ pub fn available_amount_with_plan(
     now: u64,
 ) -> Result<i128, StreamError> {
     let segments = get_rate_segments(env, stream.id);
-    available_amount_at_segments(stream, now, &segments)
+    available_amount_at_segments(stream, accrual_now(env, stream.id, now), &segments)
 }
 
 /// Cancellation split at `now`, honoring the stored schedule.
@@ -1585,7 +1639,7 @@ pub fn cancel_amounts_with_plan(
     now: u64,
 ) -> Result<(i128, i128), StreamError> {
     let segments = get_rate_segments(env, stream.id);
-    cancel_amounts_at_segments(stream, now, &segments)
+    cancel_amounts_at_segments(stream, accrual_now(env, stream.id, now), &segments)
 }
 
 /// Adds `amount` of freshly escrowed funds to the window that is currently

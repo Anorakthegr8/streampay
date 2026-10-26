@@ -81,6 +81,8 @@ pub trait StreamingPaymentsApi {
         strict: bool,
     ) -> Result<Vec<WithdrawEntry>, StreamError>;
     fn cancel_stream(env: Env, caller: Address, stream_id: u64) -> Result<(), StreamError>;
+    fn pause_stream(env: Env, caller: Address, stream_id: u64) -> Result<(), StreamError>;
+    fn resume_stream(env: Env, caller: Address, stream_id: u64) -> Result<(), StreamError>;
     fn top_up(env: Env, stream_id: u64, amount: i128) -> Result<(), StreamError>;
     fn raise_dispute(env: Env, stream_id: u64) -> Result<Dispute, StreamError>;
     fn resolve_dispute(

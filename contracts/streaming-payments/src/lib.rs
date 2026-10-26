@@ -139,9 +139,9 @@ pub use events::{
     PolicyHandoffProposed, PolicyInitialized, RateChangeAccepted, RateChangeProposed,
     ScheduledIntentCancelled, ScheduledIntentExpired, ScheduledStreamExecuted,
     SenderTransferExpired, SenderTransferProposed, SenderTransferred, SponsorActiveSet,
-    SponsorClaim, SponsorRegistered, StorageMigrated, StreamCancelled, StreamCreated,
-    StreamPolicySet, StreamRecordMigrated, StreamRefundTargetChanged, StreamScheduled,
-    StreamToppedUp, StreamsCreated, UpgradeCancelled, UpgradeProposed, Withdrawn,
+    SponsorClaim, SponsorRegistered, StorageMigrated, StreamCancelled, StreamCreated, StreamPaused,
+    StreamPolicySet, StreamRecordMigrated, StreamRefundTargetChanged, StreamResumed,
+    StreamScheduled, StreamToppedUp, StreamsCreated, UpgradeCancelled, UpgradeProposed, Withdrawn,
 };
 pub use governance::{
     GovernanceAction, Proposal, DEFAULT_VETO_WINDOW_SECONDS, MAX_SIGNERS, MIN_VETO_WINDOW_SECONDS,
@@ -282,6 +282,75 @@ fn push(
 
 #[contractimpl]
 impl StreamingPayments {
+    /// Shared body of `pause_stream` / `resume_stream` (one copy in the Wasm).
+    fn set_paused(
+        env: &Env,
+        caller: Address,
+        stream_id: u64,
+        pause: bool,
+    ) -> Result<(), StreamError> {
+        Self::require_not_frozen(env)?;
+        caller.require_auth();
+        let mut s = stream::get_stream(env, stream_id)?;
+        if s.status != StreamStatus::Active {
+            return Err(surface::reject(Branch::StreamNotActive));
+        }
+        if caller != s.sender {
+            return Err(surface::reject(Branch::PauseNotAuthorized));
+        }
+        let paused_at = stream::get_paused_at(env, stream_id);
+        let now = oracle::resolve_stream_time(env, stream_id, s.uses_oracle()).timestamp;
+        if pause {
+            if paused_at.is_some() {
+                return Err(surface::reject(Branch::PauseAlreadyPaused));
+            }
+            stream::set_paused_at(env, stream_id, Some(now));
+            #[cfg(test)]
+            cei_trace::record("event StreamPaused");
+            StreamPaused {
+                stream_id,
+                paused_at: now,
+            }
+            .publish(env);
+            return Ok(());
+        }
+        let Some(paused_at) = paused_at else {
+            return Err(surface::reject(Branch::ResumeNotPaused));
+        };
+        // Shift the window by the time spent paused *inside* it: a pause taken
+        // before `start_time` only shifts by however far `now` is past it, and
+        // one taken at or after `end_time` changes nothing about accrual.
+        let shift = if paused_at >= s.end_time {
+            0
+        } else {
+            now.saturating_sub(paused_at.max(s.start_time))
+        };
+        if shift > 0 {
+            s.start_time = s.start_time.saturating_add(shift);
+            s.end_time = s.end_time.saturating_add(shift);
+            let mut segments = stream::get_rate_segments(env, stream_id);
+            for i in 0..segments.len() {
+                let mut seg = segments.get_unchecked(i);
+                seg.start_time = seg.start_time.saturating_add(shift);
+                seg.end_time = seg.end_time.saturating_add(shift);
+                segments.set(i, seg);
+            }
+            if !segments.is_empty() {
+                stream::put_rate_segments(env, stream_id, &segments);
+            }
+            stream::put_stream(env, &s);
+        }
+        stream::set_paused_at(env, stream_id, None);
+        #[cfg(test)]
+        cei_trace::record("event StreamResumed");
+        StreamResumed {
+            stream_id,
+            new_end_time: s.end_time,
+        }
+        .publish(env);
+        Ok(())
+    }
+
     #[cfg_attr(
         not(target_family = "wasm"),
         doc = " Internal helper: verifies that mutating entrypoints are not called"
@@ -1758,6 +1827,50 @@ impl StreamingPayments {
 
     #[cfg_attr(
         not(target_family = "wasm"),
+        doc = " Pauses an active stream (sender only), freezing accrual at the stream's"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " current clock. The recipient can still withdraw what accrued before the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " pause; nothing further accrues until [`Self::resume_stream`]. Pausing an"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " already-paused stream returns [`StreamError::InvalidPauseTransition`]."
+    )]
+    pub fn pause_stream(env: Env, caller: Address, stream_id: u64) -> Result<(), StreamError> {
+        Self::set_paused(&env, caller, stream_id, true)
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Resumes a paused stream (sender only). The stream window (and any rate"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " segments) shift forward by the paused length, so accrual continues from"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " the frozen amount at the original rate and the full deposit still"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " streams. Resuming a stream that is not paused returns"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamError::InvalidPauseTransition`]."
+    )]
+    pub fn resume_stream(env: Env, caller: Address, stream_id: u64) -> Result<(), StreamError> {
+        Self::set_paused(&env, caller, stream_id, false)
+    }
+
+    #[cfg_attr(
+        not(target_family = "wasm"),
         doc = " Adds funds to an existing active stream. The deposit grows and accrual"
     )]
     #[cfg_attr(
@@ -3040,7 +3153,7 @@ impl StreamingPayments {
         // `start_time` starts the new rate at `start_time`, and one that outlives
         // `end_time` has nothing left to re-rate.
         let resolved = oracle::resolve_stream_time(&env, stream_id, s.uses_oracle());
-        let boundary = resolved.timestamp.max(s.start_time);
+        let boundary = stream::accrual_now(&env, stream_id, resolved.timestamp).max(s.start_time);
         if boundary >= s.end_time {
             return Err(surface::reject(Branch::RateProposalWindowElapsed));
         }

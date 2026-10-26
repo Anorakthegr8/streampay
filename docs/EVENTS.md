@@ -46,9 +46,11 @@ Every event the contract emits, with its on-chain topic layout and decoded data 
 | `storage_migrated` | `StorageMigrated` | `from_version: u32`, `to_version: u32` | `start_id: u64`, `end_id: u64`, `is_complete: bool` | `sha256:3e0dc77f4cd…` |
 | `stream_cancelled` | `StreamCancelled` | `stream_id: u64` | `cancelled_by: Address`, `recipient_amount: i128`, `sender_amount: i128` | `sha256:2b3062308e3…` |
 | `stream_created` | `StreamCreated` | `stream_id: u64` | `sender: Address`, `recipient: Address`, `token: Address`, `deposit: i128`, `start_time: u64`, `end_time: u64`, `cancelable: bool` | `sha256:8e7e6d5ab57…` |
+| `stream_paused` | `StreamPaused` | `stream_id: u64` | `paused_at: u64` | `sha256:0d457030c16…` |
 | `stream_policy_set` | `StreamPolicySet` | — | `token: Option<Address>`, `old_policy: Option<StreamPolicy>`, `new_policy: StreamPolicy` | `sha256:b351d5e8904…` |
 | `stream_record_migrated` | `StreamRecordMigrated` | `stream_id: u64` | `from_version: u32`, `to_version: u32` | `sha256:e1a41c8e220…` |
 | `stream_refund_target_changed` | `StreamRefundTargetChanged` | `stream_id: u64` | `previous_target: Address`, `new_target: Address`, `at_creation: bool` | `sha256:20f8ba96f8e…` |
+| `stream_resumed` | `StreamResumed` | `stream_id: u64` | `new_end_time: u64` | `sha256:76526b2a695…` |
 | `stream_scheduled` | `StreamScheduled` | `intent_id: u64` | `sender: Address`, `recipient: Address`, `token: Address`, `deposit: i128`, `start_time: u64`, `end_time: u64`, `cancelable: bool`, `interval: u64`, `occurrences: u32`, `fee_budget: i128`, `execute_after: u64`, `expires_at: u64` | `sha256:fcfb97a34e2…` |
 | `stream_topped_up` | `StreamToppedUp` | `stream_id: u64` | `sender: Address`, `amount: i128`, `new_deposit: i128` | `sha256:84629390198…` |
 | `streams_created` | `StreamsCreated` | `sender: Address` | `stream_ids: Vec<u64>` | `sha256:affd0ccd120…` |

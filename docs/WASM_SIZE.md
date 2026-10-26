@@ -381,6 +381,52 @@ their own contract, with the freeze-and-upgrade atomicity question answered
 first) is the work that has to happen before the interface grows again, not a
 number edit.
 
+## Stream pause / resume (#24) on top of #426 — open size question
+
+Issue #24 adds `pause_stream` / `resume_stream` on top of #426. Measured with
+the pinned stellar-cli 28.1.0, the rebased tree builds to **103,314 B** against
+#426's 101,691 B (**+1,623 B**). That is **914 B over** the 100 KB
+(102,400 B) gate, and this change deliberately does not touch
+`WASM_SIZE_BUDGET_KB`: per the #426 gate decision above, an interface addition
+past the 100 KB line is a maintainer call (split the contract, or move the
+gate), not a number edit inside a feature PR.
+
+The interface was already kept as small as the feature allows:
+
+- both entrypoints are thin wrappers over one private `set_paused` body, so the
+  validation and resume-shift logic exists once in `code`;
+- pause state lives under one persistent key (`DataKey::StreamPause(id)`, a
+  bare `u64` freeze point, removed on resume) instead of a new stored struct or
+  new `Stream` fields — that also keeps every existing stored stream readable;
+- the two events carry one data field each, and both invalid transitions share
+  a single error code (`InvalidPauseTransition`, 99);
+- every new interface item carries its docs through
+  `cfg_attr(not(target_family = "wasm"), doc)` (Technique 1);
+  `gate_interface_docs.py --check` reports 0 groups on this tree.
+
+Where the 1,623 B goes (section deltas against #426's build, same toolchain):
+
+| Section | #426 | + #24 | Delta |
+| --- | ---: | ---: | ---: |
+| `code` | 63,601 | 64,590 | +989 |
+| `contractspecv0` | 27,875 | 28,359 | +484 |
+| `data` | 6,790 | 6,894 | +104 |
+| exports | 2,091 | 2,124 | +33 |
+| types / imports / functions / globals | 1,030 | 1,043 | +13 |
+
+The non-`code` part (+634 B: two `function_v0` entries, two `event_v0`
+entries, one error-enum case, their topic/key symbols and two exports) is fixed
+by the unchanged public interface and already uses 634 of the 709 B of headroom
+#426 left, so no `code`-side shrink inside this feature can bring it under the
+gate: the two macro-generated entrypoint wrappers alone exceed the remaining
+75 B. Shrinks measured on the rebased tree and rejected:
+
+| Candidate | Result |
+| --- | ---: |
+| Shared `stream::get_active_stream` load-and-guard helper across the 11 `get_stream` + `Active` sites | +44 B |
+| Rebuilding the shifted rate schedule with `iter()` + `push_back` instead of in-place `set` | +33 B |
+| Dropping `#[inline(never)]` from `get_paused_at` / `accrual_now` | ±0 B |
+
 ## Categories investigated and rejected (with measurements)
 
 | Candidate | Verdict |

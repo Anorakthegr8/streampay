@@ -38,13 +38,13 @@ the field is a widening of a release-line `bool`, so old records keep their
 meaning (`None` settles against ledger time, like `Some(false)`) and
 `migrate_batch` backfills `Some(false)` on the bounded upgrade path.
 
-**Corpus gap as of this landing.** `DataKey` grew five variants after the corpus
+**Corpus gap as of this landing.** `DataKey` grew six variants after the corpus
 was cut: `oracle_config`, `oracle_report`, `pending_ownership`,
-`pending_rate_change`, `rate_segments`. They are dispatched by `kind_for_key` —
+`pending_rate_change`, `rate_segments`, `stream_pause`. They are dispatched by `kind_for_key` —
 which is why the branch that predated them stopped compiling the moment it merged
 — but they have no golden record and stay out of `COVERED_KINDS`. Pinning them
 means extending `scenario.rs` (report oracle time, propose an ownership transfer,
-propose and accept a rate change) and re-running the `#[ignore]`d generator with a
+propose and accept a rate change, pause a stream) and re-running the `#[ignore]`d generator with a
 release-line wasm, which is follow-up work rather than a merge condition.
 
 ## Layout
@@ -64,7 +64,7 @@ test_fixtures/storage/
   manifest.json     one entry per record/event: kind, durability, key render,
                     and the golden field→value map
   records/*.bin     33 blobs, one per persisted key
-  events/*.bin      23 blobs, one per emitted event
+  events/*.bin      25 blobs, one per emitted event
   baseline/…wasm    the release-line (v0.3.0) bytecode the replay boots
 ```
 
@@ -79,8 +79,12 @@ one as a standalone record too (durability labelled `Instance`) so a layout
 change fails with the per-key name instead of one opaque diff inside the
 instance blob.
 
-The scenario is deterministic: same source, same 33 records and 23 events,
-byte-for-byte. CI depends on that (see the freshness gate below).
+The scenario is deterministic: same source, same 33 records and 25 events,
+byte-for-byte. `stream_paused` / `stream_resumed` (#24) have no release-line
+counterpart, so their two blobs were cut from the dev build and appended to the
+manifest on their own: the scenario emits them on the generator path only,
+after both snapshots and at a single timestamp (a zero-length pause), so no
+pinned record moved. CI depends on that (see the freshness gate below).
 
 ## Running it
 

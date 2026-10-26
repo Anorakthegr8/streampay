@@ -403,8 +403,15 @@ pub(crate) fn run(baseline_wasm: Option<Vec<u8>>) -> ScenarioOut {
     step!(client.nominate_governor(&governor, &governor2));
     let snapshot_b = env.to_ledger_snapshot();
 
-    // The proposal's timelock has already matured at this timestamp.
     if !replay {
+        // Pause/resume (#24) postdates the baseline build, so it runs on the
+        // generator path only. Both legs land at the same timestamp, after
+        // both snapshots: resume shifts the window by zero, so no persisted
+        // record changes and the pause key is already removed again — the
+        // step only contributes the two golden events.
+        step!(client.pause_stream(&sender, &s1));
+        step!(client.resume_stream(&sender, &s1));
+        // The proposal's timelock has already matured at this timestamp.
         step!(client.execute_upgrade(&governor));
     }
 

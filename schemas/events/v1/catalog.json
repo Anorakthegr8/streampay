@@ -242,6 +242,12 @@
       "struct": "StreamCreated"
     },
     {
+      "event_key": "stream_paused",
+      "fingerprint": "sha256:0d457030c164b4e062b06573927350f9782f0cb22409977ae4d6f01e17fb557e",
+      "schema": "events/stream_paused.json",
+      "struct": "StreamPaused"
+    },
+    {
       "event_key": "stream_policy_set",
       "fingerprint": "sha256:b351d5e8904e7e12bdd4a02f67b7d93fd47f2c8609661a1414965244a22fcb20",
       "schema": "events/stream_policy_set.json",
@@ -258,6 +264,12 @@
       "fingerprint": "sha256:20f8ba96f8e86083b6e7f70644ec49d8958349f8dc3b1ee7462e3868dae8d943",
       "schema": "events/stream_refund_target_changed.json",
       "struct": "StreamRefundTargetChanged"
+    },
+    {
+      "event_key": "stream_resumed",
+      "fingerprint": "sha256:76526b2a695c524df20dcea647e64f0cd38a3f8322d5196a26b10134ca4158c0",
+      "schema": "events/stream_resumed.json",
+      "struct": "StreamResumed"
     },
     {
       "event_key": "stream_scheduled",

@@ -143,6 +143,42 @@ pub struct StreamToppedUp {
 
 #[cfg_attr(
     not(target_family = "wasm"),
+    doc = " Emitted when the sender pauses a stream, freezing accrual at `paused_at`."
+)]
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamPaused {
+    #[topic]
+    pub stream_id: u64,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Stream-clock timestamp at which accrual was frozen."
+    )]
+    pub paused_at: u64,
+}
+
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " Emitted when the sender resumes a paused stream. The window shifts by"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " the paused length, so accrual continues from the frozen point."
+)]
+#[contractevent]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StreamResumed {
+    #[topic]
+    pub stream_id: u64,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The stream's `end_time` after shifting it by the paused length."
+    )]
+    pub new_end_time: u64,
+}
+
+#[cfg_attr(
+    not(target_family = "wasm"),
     doc = " Emitted when a sender pre-authorizes a future (optionally recurring)"
 )]
 #[cfg_attr(

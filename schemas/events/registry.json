@@ -1433,6 +1433,23 @@
         }
       ]
     },
+    "StreamPaused": {
+      "canonical": "streampay-event/v1|StreamPaused|key=stream_paused|topics=[stream_id:u64],data=[paused_at:u64]",
+      "data": [
+        {
+          "name": "paused_at",
+          "type": "u64"
+        }
+      ],
+      "event_key": "stream_paused",
+      "fingerprint": "sha256:0d457030c164b4e062b06573927350f9782f0cb22409977ae4d6f01e17fb557e",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
+    },
     "StreamPolicySet": {
       "canonical": "streampay-event/v1|StreamPolicySet|key=stream_policy_set|topics=[],data=[new_policy:StreamPolicy{max_duration:u64,max_rate:i128,min_deposit:i128,min_duration:u64,min_rate:i128},old_policy:Option<StreamPolicy{max_duration:u64,max_rate:i128,min_deposit:i128,min_duration:u64,min_rate:i128}>,token:Option<Address>]",
       "data": [
@@ -1492,6 +1509,23 @@
       ],
       "event_key": "stream_refund_target_changed",
       "fingerprint": "sha256:20f8ba96f8e86083b6e7f70644ec49d8958349f8dc3b1ee7462e3868dae8d943",
+      "topics": [
+        {
+          "name": "stream_id",
+          "type": "u64"
+        }
+      ]
+    },
+    "StreamResumed": {
+      "canonical": "streampay-event/v1|StreamResumed|key=stream_resumed|topics=[stream_id:u64],data=[new_end_time:u64]",
+      "data": [
+        {
+          "name": "new_end_time",
+          "type": "u64"
+        }
+      ],
+      "event_key": "stream_resumed",
+      "fingerprint": "sha256:76526b2a695c524df20dcea647e64f0cd38a3f8322d5196a26b10134ca4158c0",
       "topics": [
         {
           "name": "stream_id",
@@ -1707,9 +1741,11 @@
     "StorageMigrated": "sha256:3e0dc77f4cd7ab650f0239a9420df76cb30b78707cd25dcbdabe542c9d37baae",
     "StreamCancelled": "sha256:2b3062308e34986aea101c7c25e12965e40b9b9143475359a87741417bca71a7",
     "StreamCreated": "sha256:8e7e6d5ab578b8a656ecf6a58e712d15546c6bd95abc5030009597abb0ee5012",
+    "StreamPaused": "sha256:0d457030c164b4e062b06573927350f9782f0cb22409977ae4d6f01e17fb557e",
     "StreamPolicySet": "sha256:b351d5e8904e7e12bdd4a02f67b7d93fd47f2c8609661a1414965244a22fcb20",
     "StreamRecordMigrated": "sha256:e1a41c8e2201e81e259bd5f52b1fc85482d3657d3dc15b8385ef9a6ec16c5659",
     "StreamRefundTargetChanged": "sha256:20f8ba96f8e86083b6e7f70644ec49d8958349f8dc3b1ee7462e3868dae8d943",
+    "StreamResumed": "sha256:76526b2a695c524df20dcea647e64f0cd38a3f8322d5196a26b10134ca4158c0",
     "StreamScheduled": "sha256:fcfb97a34e2115fabfcea45aa6a1a8e807ab85dd467186eb5e25e494fe490487",
     "StreamToppedUp": "sha256:846293901988cf6cfb2fc5e8a7821a66f8c61c2496e7e4c52c0e2f099df932c9",
     "StreamsCreated": "sha256:affd0ccd120eb20fa19a2b6072ab17bb95cf1349fdc89898e4eb9187583fbdd3",

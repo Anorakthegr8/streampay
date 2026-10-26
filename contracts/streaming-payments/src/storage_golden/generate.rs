@@ -59,6 +59,8 @@ pub(crate) fn expected_event_names() -> Vec<String> {
         "contract_frozen_state_changed",
         "storage_migrated",
         "stream_policy_set",
+        "stream_paused",
+        "stream_resumed",
     ]
     .iter()
     .map(|s| s.to_string())
