@@ -85,7 +85,10 @@ test("generates canonical XDR state and event proofs from captured testnet respo
   );
   const fixture = JSON.parse(fixtureRaw) as CapturedTestnetFixture;
 
-  const decodedEvents = fixture.getEventsResponse.result.events.map(decodeEvent);
+  // `.map(decodeEvent)` would pass the array index as decodeEvent's options
+  // argument (the registry-driven decoder gained a second parameter), so the
+  // event is decoded explicitly.
+  const decodedEvents = fixture.getEventsResponse.result.events.map((event) => decodeEvent(event));
   const stream7 = projectStreamEvents("7", decodedEvents);
 
   // Add a second stream so the state Merkle tree has multiple leaves and non-empty sibling steps

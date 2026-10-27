@@ -430,10 +430,14 @@ export function generateStreamProof(params: {
   const streamEvents: EventProofItem[] = [];
   for (let i = 0; i < eventLeaves.length; i++) {
     const item = eventLeaves[i];
-    // Include events belonging to this stream (topic[1] is u64 streamId)
-    if (item.event.topic.length >= 2) {
+    // Include events belonging to this stream (topic[1] is u64 streamId).
+    // `RpcEvent.topic` is `(string | unknown)[]` on this branch — the RPC hands
+    // topics back as base64 strings, so a non-string element is not a stream
+    // topic and is skipped rather than fed to `ScVal.fromXDR`.
+    const topicStreamIdRaw = item.event.topic.length >= 2 ? item.event.topic[1] : undefined;
+    if (typeof topicStreamIdRaw === "string") {
       try {
-        const topicStreamId = String(scValToNative(xdr.ScVal.fromXDR(item.event.topic[1], "base64")));
+        const topicStreamId = String(scValToNative(xdr.ScVal.fromXDR(topicStreamIdRaw, "base64")));
         if (topicStreamId === targetStreamId) {
           streamEvents.push({
             event: item.event,
