@@ -87,6 +87,17 @@ Repeated events are safe and idempotent: event IDs are unique, preventing double
 }
 ```
 
+### Real-Time Event Stream (Server-Sent Events)
+`GET /events/stream[?address=<address>][&streamId=<id>][&lastEventId=<id>]`
+
+Streams live contract events as Server-Sent Events (`text/event-stream`). Supports address scoping, specific stream filtering, and resumption via `Last-Event-ID` header or query parameter. Emits heartbeat `: ping\n\n` frames every 15s.
+
+```http
+id: 0000000123456-00001
+event: stream_created
+data: {"id":"0000000123456-00001","streamId":"1","eventType":"stream_created","ledger":123456,"data":{...},"stream":{...}}
+```
+
 ### Recipient Stream Query (Frontend discovery)
 `GET /streams?recipient=<address>`
 
@@ -179,6 +190,25 @@ guarantees: [docs/OUTBOX.md](../docs/OUTBOX.md).
 - `POST /api/outbox/retract` — reorg retraction hook (reconciler)
 - `GET /api/outbox/stats` — depth by state and replay high-water
 - `GET /metrics` — Prometheus exposition (`streampay_outbox_*`)
+
+---
+
+### Event Shapes Come From the Schema Registry
+
+The names and fields this indexer decodes are not hand-maintained here: they
+are generated from the contract's `#[contractevent]` structs into
+`src/generated/events.ts` by `npm run generated:events` (source of truth:
+[`schemas/events/`](../schemas/events/README.md), issue
+[#213](https://github.com/Neziahtech/streampay/issues/213)).
+
+- `decodeEvent` validates every registry-known event: the positional topic
+  count must match the registry and each declared data field must be present,
+  so a contract/registry drift surfaces as a decode error naming the schema
+  file instead of silently indexing a half-shaped stream row.
+- Extra data keys are tolerated — the registry evolves additively, and old
+  indexers keep working against a newly upgraded contract.
+- `src/registry.test.ts` asserts the generated table matches the committed
+  `schemas/events/registry.json` field-for-field.
 
 ---
 
