@@ -102,7 +102,7 @@ import {
   decodeTotalStreamsResult,
   decodeTreasuryStatusResult,
   decodeVerifyTreasuryResult,
-  decodeWithdrawAllResult,
+  decodeWithdrawAllCallResult,
   decodeWithdrawManyResult,
   decodeWithdrawMaxResult,
   decodeWithdrawResult,
@@ -537,7 +537,7 @@ export abstract class StreamPayMethods {
    * [`StreamError::RecipientPayoutFailed`] reverts the whole call.
    */
   withdrawAll(args: WithdrawAllArgs): Promise<WithdrawAllResult> {
-    return this.call(METHODS.withdrawAll, encodeWithdrawAllArgs(args), true, decodeWithdrawAllResult);
+    return this.call(METHODS.withdrawAll, encodeWithdrawAllArgs(args), true, decodeWithdrawAllCallResult);
   }
 
   /**

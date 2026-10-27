@@ -2908,7 +2908,7 @@ export function encodeWithdrawAllArgs(args: WithdrawAllArgs): xdr.ScVal[] {
   ];
 }
 
-export function decodeWithdrawAllResult(value: xdr.ScVal): WithdrawAllResult {
+export function decodeWithdrawAllCallResult(value: xdr.ScVal): WithdrawAllResult {
   return decodeWithdrawAllResult(asNative(value));
 }
 

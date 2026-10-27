@@ -11,7 +11,10 @@ property of the repository rather than a one-off manual check:
   including the deploy-time ``__constructor`` (which has no ``->``);
 * events and the contract types they reference must agree with the
   canonical event registry (``schemas/events/registry.json``), which the
-  contract's own ``event_registry`` test generates from ``events.rs``.
+  contract's own ``event_registry`` test generates from ``events.rs``;
+* the generated TypeScript codecs must declare every name exactly once — an
+  entrypoint returning a ``<fn>_result`` struct collides with that struct's own
+  codec unless the emitter resolves it.
 """
 from __future__ import annotations
 
@@ -213,6 +216,110 @@ class SpecCoverageTest(unittest.TestCase):
     def test_fingerprint_matches_the_spec(self) -> None:
         recorded = guard.FINGERPRINT_PATH.read_text().strip()
         self.assertEqual(recorded, guard.fingerprint(self.spec))
+
+
+class GeneratedCodecNamesTest(unittest.TestCase):
+    """Operation codecs must not collide with type codecs.
+
+    ``withdraw_all`` returns the ``WithdrawAllResult`` struct. The TypeScript
+    emitter names a struct codec ``decode<Struct>`` and an operation codec
+    ``decode<Pascal(fn)>Result``, so for that pair both are
+    ``decodeWithdrawAllResult`` and the generated file does not compile
+    (TS2323: cannot redeclare exported variable). The emitter resolves the
+    collision by itself; this pins the resolution and proves the rule on a
+    synthetic spec, so the next entrypoint returning a ``<fn>_result`` struct
+    cannot rediscover it through a red SDK job.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import emit_typescript as emitter
+        import generate as generator
+
+        cls.emitter = emitter
+        cls.spec = json.loads(guard.SPEC_PATH.read_text())
+        # outputs() installs its inputs as module globals; restore them afterwards
+        # so a later test in this process cannot see the synthetic spec.
+        cls.saved = (emitter.SPEC, emitter.FINGERPRINT, emitter.ERRORS)
+        files = emitter.outputs(
+            cls.spec, guard.fingerprint(cls.spec), generator.load_error_catalog()
+        )
+        cls.generated = next(text for path, text in files.items() if path.name == "generated.ts")
+        cls.methods = next(text for path, text in files.items() if path.name == "methods.ts")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        (cls.emitter.SPEC, cls.emitter.FINGERPRINT, cls.emitter.ERRORS) = cls.saved
+
+    @staticmethod
+    def _exports(text: str) -> list[str]:
+        return re.findall(r"^export function ([A-Za-z0-9_]+)", text, re.MULTILINE)
+
+    def test_generated_ts_declares_no_function_twice(self) -> None:
+        names = self._exports(self.generated)
+        dupes = sorted({name for name in names if names.count(name) > 1})
+        self.assertEqual(dupes, [], f"generated.ts re-declares {dupes}")
+
+    def test_the_colliding_operation_codec_is_disambiguated(self) -> None:
+        self.assertIn(
+            "export function decodeWithdrawAllResult(value: unknown): WithdrawAllResult {",
+            self.generated,
+            "the struct codec keeps its conventional name",
+        )
+        self.assertIn(
+            "export function decodeWithdrawAllCallResult(value: xdr.ScVal): WithdrawAllResult {",
+            self.generated,
+            "the operation codec must have its own identifier",
+        )
+        self.assertNotIn(
+            "export function decodeWithdrawAllResult(value: xdr.ScVal)",
+            self.generated,
+        )
+
+    def test_methods_ts_agrees_on_the_name(self) -> None:
+        self.assertIn("decodeWithdrawAllCallResult", self.methods)
+        self.assertNotIn("decodeWithdrawAllResult", self.methods)
+
+    def test_non_colliding_codecs_keep_their_names(self) -> None:
+        # withdraw_max returns u128 and no `WithdrawMaxResult` struct exists, so
+        # the ordinary name must be untouched — the rule is a collision rule,
+        # not a renaming of every operation.
+        self.assertIn("export function decodeWithdrawMaxResult(value: xdr.ScVal): bigint {", self.generated)
+        self.assertIn("export function encodeCreateStreamArgs(", self.generated)
+        self.assertNotIn("CallResult", self.emitter.result_decoder_name("withdraw_max"))
+
+    def test_the_rule_fires_on_a_synthetic_collision(self) -> None:
+        spec = {
+            "contract": {"version": "0"},
+            "constants": {},
+            "enums": [],
+            "unions": [],
+            "structs": [
+                {"name": "DemoResult", "fields": [{"name": "amount", "type": "u64", "doc": ""}]}
+            ],
+            "events": [
+                {
+                    "name": "DemoHappened",
+                    "topic": "demo_happened",
+                    "doc": "",
+                    "topicFields": [{"name": "id", "type": "u64", "doc": ""}],
+                    "dataFields": [{"name": "amount", "type": "u64", "doc": ""}],
+                }
+            ],
+            "functions": [
+                {"name": "demo", "doc": "", "mutating": False, "args": [], "returns": "DemoResult"}
+            ],
+        }
+        files = self.emitter.outputs(spec, "0" * 64, [(1, "DemoError")])
+        generated = next(text for path, text in files.items() if path.name == "generated.ts")
+        names = self._exports(generated)
+        self.assertEqual(
+            sorted({name for name in names if names.count(name) > 1}),
+            [],
+            "a `<fn>_result` struct must not collide with its operation codec",
+        )
+        self.assertIn("export function decodeDemoResult(value: unknown): DemoResult {", generated)
+        self.assertIn("export function decodeDemoCallResult(value: xdr.ScVal): DemoResult {", generated)
 
 
 if __name__ == "__main__":
