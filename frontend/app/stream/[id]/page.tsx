@@ -22,6 +22,7 @@ import {
   type SponsorView,
   type StreamView,
 } from "@/lib/stellar";
+import { useStreamEvents } from "@/lib/useStreamEvents";
 import {
   INITIAL_STATE,
   startLiveAccrual,
@@ -110,6 +111,13 @@ export default function StreamDetail() {
     };
   }, [id]);
 
+  // Re-read the stream through the live-accrual engine — the same path the
+  // Refresh button and the post-claim updates take. The SSE feed and its
+  // polling fallback call this when an event for this stream lands.
+  const reload = useCallback(async () => {
+    await engineRef.current?.refresh();
+  }, []);
+
   // displayAvailable is the guarded live counter (contract-available + one
   // epsilon at most). Submission decisions and client-side guards are
   // strictly validated against `available`, the canonical simulate-at-ledger
@@ -131,6 +139,22 @@ export default function StreamDetail() {
       void Promise.resolve().then(() => setAmount(value));
     }
   }, [available, isAmountDirty]);
+
+  // Live real-time stream push via SSE with polling fallback when disconnected
+  const streamAddress = address || stream?.recipient || stream?.sender || null;
+
+  const { isLive } = useStreamEvents({
+    address: streamAddress,
+    streamId: id,
+    enabled: Boolean(id && streamAddress),
+    onEvent: (event) => {
+      if (event.streamId === id) {
+        void reload();
+      }
+    },
+    onFallbackPoll: reload,
+    fallbackPollIntervalMs: 15_000,
+  });
 
   useEffect(() => {
     if (live.error) toast.error(describeError(live.error));
@@ -332,7 +356,36 @@ export default function StreamDetail() {
 
   return (
     <main className="wrap">
-      <p className="kicker mono">STREAM #{stream.id}</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <p className="kicker mono">STREAM #{stream.id}</p>
+        {isLive && (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              color: "#4ade80",
+              background: "rgba(74, 222, 128, 0.1)",
+              padding: "2px 8px",
+              borderRadius: "999px",
+              border: "1px solid rgba(74, 222, 128, 0.3)",
+              fontSize: "11px",
+              fontWeight: 600,
+            }}
+          >
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background: "#4ade80",
+                boxShadow: "0 0 6px #4ade80",
+              }}
+            />
+            Live SSE
+          </span>
+        )}
+      </div>
       <h1>
         {stream.status === "Active" ? "⚡ Streaming" : `⏹ ${stream.status}`}
       </h1>
