@@ -556,6 +556,209 @@ pub enum StreamError {
         doc = " set is bootstrapped; the direct entry point is closed."
     )]
     GovernanceTimelockRequired = 79,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " A dispute is open on the stream: `cancel_stream` and `top_up` are"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " frozen until the sender resolves it or the timelock expires."
+    )]
+    DisputeActive = 80,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " No open dispute exists on the stream."
+    )]
+    DisputeNotFound = 81,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The dispute's timelock has not elapsed yet."
+    )]
+    DisputeNotExpired = 82,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " No rate-change proposal is stored for this stream."
+    )]
+    NoPendingRateChange = 83,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The pending rate-change proposal's acceptance window has elapsed; the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " rate must be proposed again by a stream party."
+    )]
+    RateProposalExpired = 84,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " An unexpired rate-change proposal already exists for this stream; cancel"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " or accept it before proposing another."
+    )]
+    RateProposalPending = 85,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The stream already carries the maximum number of rate segments"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " (`MAX_RATE_SEGMENTS`); cancel it or open a new stream instead."
+    )]
+    TooManyRateSegments = 86,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " A stored record uses a layout this build does not understand: its"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " version tag is from the future, or its shape decodes as neither the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " current versioned layout nor the legacy untagged one. Reads fail closed"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " rather than guessing — see `stream::get_stream_record`."
+    )]
+    SchemaVersionUnsupported = 87,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " No sender-transfer proposal is stored for the stream, or the one that"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " was there has already been executed, cancelled or replaced."
+    )]
+    SenderTransferNotFound = 88,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The sender-transfer proposal's acceptance window has elapsed; the role"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " did not move. Reclaim the stale entry with `expire_sender_transfer`."
+    )]
+    SenderTransferExpired = 89,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `expire_sender_transfer` refused to reclaim a proposal that is still"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " inside its acceptance window — only the recipient's consent or the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " window ending may end a proposal."
+    )]
+    SenderTransferNotExpired = 90,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The nonce presented with the consent does not match the nonce stored"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " with the proposal, so the consent is aimed at a different (or already"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " replaced) proposal.")]
+    SenderTransferNonceMismatch = 91,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " An unexpired sender-transfer proposal already exists for this stream;"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " let it expire, execute or reclaim it before proposing another."
+    )]
+    SenderTransferPending = 92,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The caller is not the stream's recipient, so their consent cannot"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " execute a sender-role transfer.")]
+    SenderTransferNotConsenter = 93,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Only the current sender may route the refund of their deposit. The"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " refund claim is the counterpart of the money that funded the stream, so"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " a stranger cannot redirect it by calling `set_refund_target`."
+    )]
+    RefundTargetNotSender = 94,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The requested refund target already holds the claim, so the amendment"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " would rewrite the same address and emit an event that reports no"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " change. Rejected so the log only ever records real routing changes."
+    )]
+    RefundTargetUnchanged = 95,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `withdraw_many` was called with an empty list of stream ids. Rejected"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " as its own code rather than `BatchEmpty` (47), which is documented as a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " *creation* batch precondition, so callers can tell the two apart."
+    )]
+    WithdrawBatchEmpty = 96,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `withdraw_many` was called with more stream ids than"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `MAX_WITHDRAW_BATCH`. The cap is what keeps a single claim call inside"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " the transaction budget; split larger sets across several calls."
+    )]
+    WithdrawBatchTooLarge = 97,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `withdraw_many` was given the same stream id more than once. The second"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " entry would claim against state the first entry already mutated (and,"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " for `withdraw_max`-style amounts, would silently double-count the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " available balance), so the whole call is rejected instead of"
+    )]
+    #[cfg_attr(not(target_family = "wasm"), doc = " de-duplicated.")]
+    WithdrawDuplicateStreamIds = 98,
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Invalid pause transition: `pause_stream` on a stream that is already"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " paused, or `resume_stream` on a stream that is not paused."
+    )]
+    InvalidPauseTransition = 99,
 }
 
 impl StreamError {
@@ -642,6 +845,26 @@ impl StreamError {
         StreamError::GovernanceDuplicateSignature,
         StreamError::GovernanceSignaturesInsufficient,
         StreamError::GovernanceTimelockRequired,
+        StreamError::DisputeActive,
+        StreamError::DisputeNotFound,
+        StreamError::DisputeNotExpired,
+        StreamError::NoPendingRateChange,
+        StreamError::RateProposalExpired,
+        StreamError::RateProposalPending,
+        StreamError::TooManyRateSegments,
+        StreamError::SchemaVersionUnsupported,
+        StreamError::SenderTransferNotFound,
+        StreamError::SenderTransferExpired,
+        StreamError::SenderTransferNotExpired,
+        StreamError::SenderTransferNonceMismatch,
+        StreamError::SenderTransferPending,
+        StreamError::SenderTransferNotConsenter,
+        StreamError::RefundTargetNotSender,
+        StreamError::RefundTargetUnchanged,
+        StreamError::WithdrawBatchEmpty,
+        StreamError::WithdrawBatchTooLarge,
+        StreamError::WithdrawDuplicateStreamIds,
+        StreamError::InvalidPauseTransition,
     ];
 
     /// The stable numeric value carried across the contract boundary

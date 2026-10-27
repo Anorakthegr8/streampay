@@ -12,7 +12,9 @@ interface on top, and the follow-up probes in
 measure that the remaining 4,144 B exists only inside the public interface.
 Merging the governance timelock afterwards added a second, larger tranche —
 see [Second re-baseline](#second-re-baseline-merging-the-governance-timelock-64143-b--78266-b-gate-77-kb)
-— and the size gate now sits at **77 KB**.
+— and issue #54's rate-renegotiation interface a third: the size gate now sits
+at **83 KB**, see
+[Third re-baseline](#third-re-baseline-mid-stream-rate-renegotiation-78266-b--84613-b-gate-83-kb).
 
 All numbers below are built with the pinned release toolchain
 (`stellar-cli 28.1.0`, `rustc 1.99.1`, `wasm32v1-none`, `stellar contract build`
@@ -35,11 +37,12 @@ Final size: **60,386 bytes (59.0 KiB)** — under the 60 KB target, and 33.6 %
 smaller than the baseline this work started from (59.7 % of it). Measured
 against the 120 KB budget the size gate was set at (issue #35), the binary is
 now **under two thirds of that budget**; the budget was lowered to 60 KB here
-so any regression fails CI, and it now sits at **77 KB** on the merged tree for
+so any regression fails CI, and it now sits at **83 KB** on the merged tree for
 the reasons in
-[Size gate status](#size-gate-status-64143-b-is-the-measured-floor-of-this-interface)
+[Size gate status](#size-gate-status-64143-b-is-the-measured-floor-of-this-interface),
+[Second re-baseline](#second-re-baseline-merging-the-governance-timelock-64143-b--78266-b-gate-77-kb)
 and
-[Second re-baseline](#second-re-baseline-merging-the-governance-timelock-64143-b--78266-b-gate-77-kb).
+[Third re-baseline](#third-re-baseline-mid-stream-rate-renegotiation-78266-b--84613-b-gate-83-kb).
 
 > **These two rows were measured on the tree before `main` was merged in.**
 > After the merge the contract is 64,143 B — see
@@ -284,6 +287,178 @@ merits (the `code` section is 63 % of the binary and `governance_propose` is
 the single largest function in it), but it is out of scope for #58: this PR
 ships no behavior change.
 
+
+## Third re-baseline: mid-stream rate renegotiation (78,266 B → 84,613 B, gate 83 KB)
+
+Issue #54 adds the two-step rate change: `propose_rate_change`,
+`accept_rate_change` and `cancel_rate_change` plus the two read-only views
+(`pending_rate_change`, `rate_segments`), the `RateChangeProposed` /
+`RateChangeAccepted` events, the `RateSegment` and `PendingRateChange` stored
+types, error codes 80–83, and the piecewise accrual helpers in `stream.rs`
+that every existing read path now goes through.
+
+| Section | Merged with governance | Merged with rate renegotiation | Δ |
+|---|---|---|---|
+| `code` | 49,317 | 53,479 | +4,162 |
+| `contractspecv0` | 21,083 | 22,595 | +1,512 |
+| `data` | 4,999 | 5,536 | +537 |
+| `export` | 1,631 | 1,738 | +107 |
+| headers/meta/other | 1,236 | 1,265 | +29 |
+| **Total** | **78,266** | **84,613 (82.6 KiB)** | **+6,347** |
+
+Attribution: +4,162 B is compiled body — `accept_rate_change` alone is 1,499 B
+(the rebalancing math, the segment rewrite and the conditional top-up pull in
+one leg), and the rest is the proposal leg plus the segment-aware accrual and
+capacity helpers; +1,512 B is the *structural* spec entries of the 5
+entrypoints, 2 events, 2 stored structs and 4 error codes; +537 B is the new
+event/field symbols in `data`; +107 B the 5 new exports.
+
+Probes run on this tree before accepting the number:
+
+| Probe | Result |
+|---|---|
+| `gate_interface_docs.py --apply` on the merged tree | 33 doc groups gated (5 in `lib.rs`, 12 in `events.rs`, 12 in `stream.rs`, 4 in `errors.rs`); `--check` then reports 0. |
+| Residual doc prose in the artifact (`grep` of the built wasm for the new entrypoints' and structs' doc phrases) | **0 hits** — only the identifiers themselves (`accept_rate_change`, `RateSegment`, …) survive, as spec and export symbols. |
+| Reusing an existing leg instead of a new entrypoint | Rejected: a rate change cannot piggyback on `top_up` or `withdraw`, because both move funds unilaterally and the whole point of #54 is that neither party can impose a new rate alone. |
+| Dedup of the three rate legs (Technique 2 shape) | Not taken: `propose` and `accept` share only the load/auth preamble that `authorize_*` helpers already own; the arithmetic that follows is different in each direction (a proposal prices nothing, an acceptance prices the schedule and rebalances it). |
+
+**Gate decision.** `WASM_SIZE_BUDGET_KB` moves from 77 to **83**
+(84,992 B — 379 B of headroom over the measured 84,613 B), the same rule
+applied to the new interface. This is the entrypoint addition the 77 KB
+comment anticipated, so the split discussion belongs here rather than in a
+later cleanup:
+
+- The `code` section is still ~63 % of the binary, and the two largest
+  functions in it are `governance_propose` (2,195 B) and
+  `sponsored_withdraw` (1,590 B) — neither is streaming accounting.
+- The natural first cut is the governance module: its five entrypoints are
+  thin wrappers over `governance.rs` and its state is instance storage, so a
+  separate contract removes ~10 KB of code and most of the governance spec
+  entries. The cost is real, though: the governor would no longer be able to
+  freeze or upgrade the stream contract in the same transaction, cross-contract
+  calls add instructions to paths the footprint gate measures, and every
+  deployed instance would gain a second contract id to track in
+  `docs/FOOTPRINT.md`, the deploy scripts and the attestation digest flow.
+- Rate renegotiation itself cannot be the thing that moves out: its segments
+  are read on every accrual path (`available_amount_with_plan`,
+  `cancel_amounts_with_plan`, `streamed_amount_at_segments`), so a second
+  contract would put a cross-contract read on the hot path of every withdrawal.
+
+Recommendation: keep the single contract and the ratchet, and open the split as
+its own issue with the freeze/upgrade atomicity question answered first. #54
+ships its interface and moves the gate under the documented rule; cutting the
+feature to hold 77 KB would be a product decision made by a size knob.
+
+## Gate decision — #426 (90 KB → 100 KB)
+
+#426 is the entrypoint addition the 90 KB comment named as the trigger. Its
+merged tree builds to **101,691 B** with the pinned stellar-cli 28.1.0, against
+the 91,534 B the 90 KB gate was set on — **+10,157 B**, and the gate moves to
+**100 KB** (102,400 B, 709 B of headroom), the same smallest-whole-KB rule.
+
+What the delta buys, and why it is not doc prose:
+
+| Addition | Count |
+|---|---|
+| New entrypoints | 15 — `create_stream_with_refund`, `set_refund_target`, `withdraw_many`, `propose_/accept_/cancel_ownership_transfer`, `pending_ownership_transfer`, `propose_/accept_/expire_sender_transfer`, `pending_sender_transfer`, `sender_history`, `refund_target`, `stream_record_version`, `migrate_stream_version` |
+| New events | 6 structs in `events.rs` (`BatchWithdrawSummary`, `StreamRecordMigrated`, `SenderTransferProposed`, `SenderTransferred`, `SenderTransferExpired`, `StreamRefundTargetChanged`) |
+| New error codes | 12 (87–98) |
+| New storage keys | 3 `DataKey` variants (`PendingSenderTransfer`, `SenderHistory`, `RefundTarget`) |
+| New dependencies | none |
+
+Probes before accepting the number:
+
+| Probe | Result |
+|---|---|
+| `gate_interface_docs.py --check` on the merged tree | **0 doc groups** — #426's interface items arrived already gated, so Technique 1 has nothing left to recover here (unlike the governance and dispute merges, which each gave back 5–6 KB). |
+| Per-entrypoint cost | ~680 B average, in line with the 1,499 B `accept_rate_change` / 2,195 B `governance_propose` range reported above: the transfer legs are preamble + storage rewrite, and the view functions are cheap. |
+| Dropping the batch/migration entrypoints to hold 90 KB | Rejected as a size-knob product decision — `withdraw_many` is the rent-amortisation path and `migrate_stream_version` is what makes the widened `Stream` readable for records written before it. |
+
+**The split is now overdue, not merely triggered.** At 709 B of headroom the very
+next interface addition fails this gate, which is the intended behaviour: the
+pre-declared next step (moving the governance/ownership-transfer families into
+their own contract, with the freeze-and-upgrade atomicity question answered
+first) is the work that has to happen before the interface grows again, not a
+number edit.
+
+## Stream pause / resume (#24) on top of #426 — open size question
+
+Issue #24 adds `pause_stream` / `resume_stream` on top of #426. Measured with
+the pinned stellar-cli 28.1.0, the rebased tree builds to **103,314 B** against
+#426's 101,691 B (**+1,623 B**). That is **914 B over** the 100 KB
+(102,400 B) gate, and this change deliberately does not touch
+`WASM_SIZE_BUDGET_KB`: per the #426 gate decision above, an interface addition
+past the 100 KB line is a maintainer call (split the contract, or move the
+gate), not a number edit inside a feature PR.
+
+The interface was already kept as small as the feature allows:
+
+- both entrypoints are thin wrappers over one private `set_paused` body, so the
+  validation and resume-shift logic exists once in `code`;
+- pause state lives under one persistent key (`DataKey::StreamPause(id)`, a
+  bare `u64` freeze point, removed on resume) instead of a new stored struct or
+  new `Stream` fields — that also keeps every existing stored stream readable;
+- the two events carry one data field each, and both invalid transitions share
+  a single error code (`InvalidPauseTransition`, 99);
+- every new interface item carries its docs through
+  `cfg_attr(not(target_family = "wasm"), doc)` (Technique 1);
+  `gate_interface_docs.py --check` reports 0 groups on this tree.
+
+Where the 1,623 B goes (section deltas against #426's build, same toolchain):
+
+| Section | #426 | + #24 | Delta |
+| --- | ---: | ---: | ---: |
+| `code` | 63,601 | 64,590 | +989 |
+| `contractspecv0` | 27,875 | 28,359 | +484 |
+| `data` | 6,790 | 6,894 | +104 |
+| exports | 2,091 | 2,124 | +33 |
+| types / imports / functions / globals | 1,030 | 1,043 | +13 |
+
+The non-`code` part (+634 B: two `function_v0` entries, two `event_v0`
+entries, one error-enum case, their topic/key symbols and two exports) is fixed
+by the unchanged public interface and already uses 634 of the 709 B of headroom
+#426 left, so no `code`-side shrink inside this feature can bring it under the
+gate: the two macro-generated entrypoint wrappers alone exceed the remaining
+75 B. Shrinks measured on the rebased tree and rejected:
+
+| Candidate | Result |
+| --- | ---: |
+| Shared `stream::get_active_stream` load-and-guard helper across the 11 `get_stream` + `Active` sites | +44 B |
+| Rebuilding the shifted rate schedule with `iter()` + `push_back` instead of in-place `set` | +33 B |
+| Dropping `#[inline(never)]` from `get_paused_at` / `accrual_now` | ±0 B |
+
+## Gate decision — #407 (100 KB → 105 KB)
+
+#407 is the interface addition the #426 decision said would have to be a
+maintainer call. Merged tree: **103,314 B** (pinned stellar-cli 28.1.0), +1,623 B
+on #426's 101,691 B — 2 entrypoints (`pause_stream` / `resume_stream`, both thin
+wrappers over one private `set_paused`), 2 events, error code 99, one `DataKey`
+variant, no new dependencies. The gate moves to **105 KB** (107,520 B, 4,206 B of
+headroom).
+
+Two things about that number are worth recording:
+
+| Point | Detail |
+|---|---|
+| The strict rule says 101 KB | "Smallest whole KB the interface fits" would put the gate at 101 KB (103,424 B, **110 B** of headroom). 105 KB is taken deliberately, not by rounding: 110 B is less than one renamed parameter — spec symbols are hashed into `contractspecv0` — so a gate at 101 KB would send #407 back for a naming nit and guarantee a second maintainer decision before this feature could merge. The extra 4 KB is the cost of not re-opening the gate for every byte. |
+| 105 KB is 87.5% of the real ceiling | #35's deploy budget is 120 KB (122,880 B). 15,360 B of genuine deploy headroom is left, and the split (#441) — not another bump — is what should consume it. |
+
+Probes before accepting the number:
+
+| Probe | Result |
+|---|---|
+| Contributor's shrink table (above) | Measured on the rebased tree: +44 B, +33 B, ±0 B — no in-feature path to 102,400 B. |
+| `gate_interface_docs.py --check` | 0 doc groups on the merged tree; #407's interface items arrive gated with `cfg_attr(not(target_family = "wasm"), doc)`. |
+| `scripts/check_error_codes.sh` | 99 variants, codes 1–99 contiguous and unique; pause/resume shares one code (`InvalidPauseTransition = 99`), so #407 takes exactly one slot. |
+| Merge shape | Single commit on `9a46329e`, no conflicts, no CI edits in the PR. |
+
+**The bump is now closed as a mechanism.** From here, a PR that adds an
+entrypoint, event, stored type or error code is expected to land *after* #441
+decides the split, or be rejected at the 105 KB line. #175 (3 events, 3 codes, 2
+`DataKey` kinds, 6 entrypoints) is the concrete case that this rule now blocks:
+at ~680 B per entrypoint it cannot be absorbed by any budget short of the split,
+and editing this number for it would be the product decision-by-size-knob that
+the #426 and #407 sections both refuse to make.
 
 ## Categories investigated and rejected (with measurements)
 
