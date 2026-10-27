@@ -558,15 +558,16 @@ export function decodeWithdrawAllResult(v: xdr.ScVal): WithdrawAllResult {
  */
 export async function withdrawAllFromStreams(
   recipient: string,
+  signer: TxSigner,
   pageBounds?: { offset: number; limit: number }
 ): Promise<WithdrawAllResult> {
   return send(
     recipient,
     buildWithdrawAllOperation(CONTRACT_ID, recipient, pageBounds),
-    (v) => decodeWithdrawAllResult(v)
+    (v) => decodeWithdrawAllResult(v),
+    signer
   );
 }
-
 
 /**
  * A simulated, unsigned transaction ready to be signed and held. The claim

@@ -158,14 +158,15 @@ pub use sponsor::{PeriodSpend, SponsorConfig};
 // `streamed_at` is re-exported for the fuzz target and downstream rate
 // calculators: it is a pure function requiring no `Env`.
 pub use stream::{
-    streamed_amount_at_segments, streamed_at, AssetTransfer, BatchEntry, ClaimFailure, MigrationStatus, OwnershipRole, PageBounds,
-    PendingOwnership, PendingRateChange, PendingSenderTransfer, PendingUpgrade, RateSegment,
-    SenderHistory, SenderTransferRecord, Stream, StreamStatus, StreamVersionReport,
-    VersionedStream, WithdrawAllResult, WithdrawEntry, WithdrawOutcome, CURRENT_STREAM_RECORD_VERSION,
-    INITIAL_SCHEMA_VERSION, MAX_BATCH, MAX_DURATION_SECONDS, MAX_MIGRATION_BATCH_SIZE,
-    MAX_PAGE_SIZE, MAX_RATE_SEGMENTS, MAX_WITHDRAW_BATCH, MIN_BATCH, MIN_UPGRADE_DELAY_SECONDS,
-    OWNERSHIP_PROPOSAL_TTL_SECONDS, RATE_PROPOSAL_TTL_SECONDS, STREAM_RECORD_VERSION_V1,
-    STREAM_RECORD_VERSION_V2, TARGET_SCHEMA_VERSION,
+    streamed_amount_at_segments, streamed_at, AssetTransfer, BatchEntry, ClaimFailure,
+    MigrationStatus, OwnershipRole, PageBounds, PendingOwnership, PendingRateChange,
+    PendingSenderTransfer, PendingUpgrade, RateSegment, SenderHistory, SenderTransferRecord,
+    Stream, StreamStatus, StreamVersionReport, VersionedStream, WithdrawAllResult, WithdrawEntry,
+    WithdrawOutcome, CURRENT_STREAM_RECORD_VERSION, INITIAL_SCHEMA_VERSION, MAX_BATCH,
+    MAX_DURATION_SECONDS, MAX_MIGRATION_BATCH_SIZE, MAX_PAGE_SIZE, MAX_RATE_SEGMENTS,
+    MAX_WITHDRAW_BATCH, MIN_BATCH, MIN_UPGRADE_DELAY_SECONDS, OWNERSHIP_PROPOSAL_TTL_SECONDS,
+    RATE_PROPOSAL_TTL_SECONDS, STREAM_RECORD_VERSION_V1, STREAM_RECORD_VERSION_V2,
+    TARGET_SCHEMA_VERSION,
 };
 pub use treasury::{fee_amount, FeeScan, Treasury, TreasuryStatus, BPS_DENOMINATOR, MAX_FEE_BPS};
 
@@ -1570,19 +1571,52 @@ impl StreamingPayments {
         Ok(amount)
     }
 
-    #[cfg_attr(not(target_family = "wasm"), doc = " Claims every stream on one page of the recipient's index in one transaction,")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " paying one aggregated transfer per asset instead of one per stream.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Claims every stream on one page of the recipient's index in one transaction,"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " paying one aggregated transfer per asset instead of one per stream."
+    )]
     #[cfg_attr(not(target_family = "wasm"), doc = "")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " The page is `page_bounds` (default: offset 0, [`MAX_PAGE_SIZE`] streams; a")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " `limit` of 0 or above the cap is clamped to it), which keeps a call under the")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " ledger-entry limit. `next_offset` is `Some` while the index has more streams.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " The page is `page_bounds` (default: offset 0, [`MAX_PAGE_SIZE`] streams; a"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " `limit` of 0 or above the cap is clamped to it), which keeps a call under the"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " ledger-entry limit. `next_offset` is `Some` while the index has more streams."
+    )]
     #[cfg_attr(not(target_family = "wasm"), doc = "")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " Each stream goes through the same checks and accrual math as `withdraw_max`.")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " A stream that fails one of them before paying (not yours, not active, nothing")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " accrued, overflow) is reported in `failed_streams` and skipped; the others")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " still pay. As in `withdraw_many`, a refused token transfer is the exception:")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " state and `Withdrawn` events are written before tokens move, so")]
-    #[cfg_attr(not(target_family = "wasm"), doc = " [`StreamError::RecipientPayoutFailed`] reverts the whole call.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Each stream goes through the same checks and accrual math as `withdraw_max`."
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " A stream that fails one of them before paying (not yours, not active, nothing"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " accrued, overflow) is reported in `failed_streams` and skipped; the others"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " still pay. As in `withdraw_many`, a refused token transfer is the exception:"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " state and `Withdrawn` events are written before tokens move, so"
+    )]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " [`StreamError::RecipientPayoutFailed`] reverts the whole call."
+    )]
     pub fn withdraw_all(
         env: Env,
         recipient: Address,
@@ -1598,8 +1632,7 @@ impl StreamingPayments {
         };
 
         let key = stream::DataKey::RecipientStreams(recipient.clone());
-        let (stream_ids, total_count) =
-            stream::page_stream_ids_with_len(&env, &key, offset, limit);
+        let (stream_ids, total_count) = stream::page_stream_ids_with_len(&env, &key, offset, limit);
         let end = offset.saturating_add(stream_ids.len());
         let next_offset = if end < total_count { Some(end) } else { None };
 

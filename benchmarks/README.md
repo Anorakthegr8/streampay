@@ -22,7 +22,7 @@ All figures reflect canonical contract executions on active test suites and audi
 | **Create Stream Fee** | **0.000350 XLM** (~$0.000042) | **218,450 gas** (~$0.0655) | **218,450 gas** (~$13.11) | **174,800 gas** (~$0.0524) | **174,800 gas** (~$10.49) |
 | **Claim Cost (1 Claim)** | **0.000245 XLM** (~$0.000029) | **59,320 gas** (~$0.0178) | **59,320 gas** (~$3.56) | **0 gas** (Passive flow) | **0 gas** (Passive flow) |
 | **Cancel Cost** | **0.000320 XLM** (~$0.000038) | **84,150 gas** (~$0.0252) | **84,150 gas** (~$5.05) | **78,600 gas** (~$0.0236) | **78,600 gas** (~$4.72) |
-| **Claim CPU / Gas** | **347,082 CPU** | **59,320 Gas** | **59,320 Gas** | **0 Gas** (52k to unwrap) | **0 Gas** (52k to unwrap) |
+| **Claim CPU / Gas** | **384,170 CPU** | **59,320 Gas** | **59,320 Gas** | **0 Gas** (52k to unwrap) | **0 Gas** (52k to unwrap) |
 | **30-Day Stream (4 Claims)** | **$0.0303 total** | **$0.1619 total** | **$32.40 total** | **$0.1110 total** | **$15.21 total** |
 | **30-Day Stream (30 Claims)**| **$0.0311 total** | **$0.6247 total** | **$124.96 total** | **$0.0820 total** | **$15.21 total** |
 

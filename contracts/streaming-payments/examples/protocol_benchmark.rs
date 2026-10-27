@@ -202,7 +202,7 @@ fn main() {
         end_time: end,
         cancelable: true,
         status: StreamStatus::Active,
-        use_oracle: false,
+        use_oracle: Some(false),
     };
 
     let mono_stream_bytes = sample_stream.to_xdr(&env).len();

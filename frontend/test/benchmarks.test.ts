@@ -40,11 +40,11 @@ describe("Protocol Benchmark Data & Methodology Integrity", () => {
     // StreamPay metrics
     const spClaim = OPERATIONS_BENCHMARK.claim.find((c) => c.protocol.includes("StreamPay"));
     assert.ok(spClaim);
-    assert.equal(spClaim.nativeValue, 347082);
+    assert.equal(spClaim.nativeValue, 384170);
 
     const spCancel = OPERATIONS_BENCHMARK.cancel.find((c) => c.protocol.includes("StreamPay"));
     assert.ok(spCancel);
-    assert.equal(spCancel.nativeValue, 523563);
+    assert.equal(spCancel.nativeValue, 591737);
   });
 
   it("calculates realistic lifecycle costs across duration and claim frequencies", () => {

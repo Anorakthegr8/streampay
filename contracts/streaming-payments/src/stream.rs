@@ -774,8 +774,14 @@ pub struct MigrationStatus {
     pub is_complete: bool,
 }
 
-#[cfg_attr(not(target_family = "wasm"), doc = " Pagination bounds for [`crate::StreamingPayments::withdraw_all`]: which slice of the")]
-#[cfg_attr(not(target_family = "wasm"), doc = " recipient's stream index to claim. `limit` is clamped to [`MAX_PAGE_SIZE`]; `0` means")]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " Pagination bounds for [`crate::StreamingPayments::withdraw_all`]: which slice of the"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " recipient's stream index to claim. `limit` is clamped to [`MAX_PAGE_SIZE`]; `0` means"
+)]
 #[cfg_attr(not(target_family = "wasm"), doc = " \"the largest page\".")]
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -784,7 +790,10 @@ pub struct PageBounds {
     pub limit: u32,
 }
 
-#[cfg_attr(not(target_family = "wasm"), doc = " Total paid out in one asset by a [`crate::StreamingPayments::withdraw_all`] call.")]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " Total paid out in one asset by a [`crate::StreamingPayments::withdraw_all`] call."
+)]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AssetTransfer {
@@ -792,8 +801,14 @@ pub struct AssetTransfer {
     pub amount: i128,
 }
 
-#[cfg_attr(not(target_family = "wasm"), doc = " A stream [`crate::StreamingPayments::withdraw_all`] skipped, with the numeric code of")]
-#[cfg_attr(not(target_family = "wasm"), doc = " the [`crate::StreamError`] that skipped it.")]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " A stream [`crate::StreamingPayments::withdraw_all`] skipped, with the numeric code of"
+)]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " the [`crate::StreamError`] that skipped it."
+)]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClaimFailure {
@@ -801,18 +816,33 @@ pub struct ClaimFailure {
     pub error_code: u32,
 }
 
-#[cfg_attr(not(target_family = "wasm"), doc = " The answer of [`crate::StreamingPayments::withdraw_all`] for one page of the")]
+#[cfg_attr(
+    not(target_family = "wasm"),
+    doc = " The answer of [`crate::StreamingPayments::withdraw_all`] for one page of the"
+)]
 #[cfg_attr(not(target_family = "wasm"), doc = " recipient's stream index.")]
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WithdrawAllResult {
-    #[cfg_attr(not(target_family = "wasm"), doc = " Payouts aggregated per asset: one token transfer each.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Payouts aggregated per asset: one token transfer each."
+    )]
     pub transfers: Vec<AssetTransfer>,
-    #[cfg_attr(not(target_family = "wasm"), doc = " Streams that paid out, in index order.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Streams that paid out, in index order."
+    )]
     pub successful_stream_ids: Vec<u64>,
-    #[cfg_attr(not(target_family = "wasm"), doc = " Streams that were skipped, with the reason.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Streams that were skipped, with the reason."
+    )]
     pub failed_streams: Vec<ClaimFailure>,
-    #[cfg_attr(not(target_family = "wasm"), doc = " Offset of the next page, or `None` once the index is exhausted.")]
+    #[cfg_attr(
+        not(target_family = "wasm"),
+        doc = " Offset of the next page, or `None` once the index is exhausted."
+    )]
     pub next_offset: Option<u32>,
 }
 

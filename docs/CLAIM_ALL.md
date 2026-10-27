@@ -8,6 +8,8 @@ This document specifies the design, security invariants, error-isolation semanti
 
 The `withdraw_all` entrypoint allows a recipient to withdraw accrued funds from all their eligible streams in a single atomic transaction, aggregating payouts per asset.
 
+It is the index-driven sibling of `withdraw_many`: `withdraw_many` claims an explicit list of up to `MAX_WITHDRAW_BATCH` ids and pays one transfer per stream, while `withdraw_all` walks a page of the recipient's own index and pays one transfer per asset. Both run every stream through the same checks and accrual math as `withdraw_max`.
+
 ```rust
 pub fn withdraw_all(
     env: Env,
@@ -70,7 +72,7 @@ To prevent transaction exhaustion, unbounded looping, and Soroban ledger entry f
 
 ## 3. Partial-Failure Decision Table
 
-Per-stream non-fatal conditions must **never** revert the whole batch transaction. This ensures that a single unstarted, already-withdrawn, or depleted stream does not block claiming from other valid streams.
+Per-stream conditions found *before* any tokens move never revert the whole batch. This ensures that a single unstarted, already-withdrawn, or depleted stream does not block claiming from other valid streams. A refused token transfer is the one exception (see §5).
 
 | Scenario | Condition | State Mutation | Event Emitted | Return Value Entry | Batch Reverts? |
 |---|---|---|---|---|:---:|
@@ -80,8 +82,8 @@ Per-stream non-fatal conditions must **never** revert the whole batch transactio
 | **Wrong recipient** | `stream.recipient != recipient` | None | None | `ClaimFailure { stream_id, error_code: 12 }` | **No** (Isolated per stream) |
 | **Non-active stream** | `stream.status == Cancelled` or `Depleted` | None | None | `ClaimFailure { stream_id, error_code: 5 }` | **No** (Isolated per stream) |
 | **Nothing to withdraw** | Accrued balance `<= 0` (unstarted or fully withdrawn) | None | None | `ClaimFailure { stream_id, error_code: 13 }` | **No** (Isolated per stream) |
-| **Math overflow** | Accrual arithmetic fails | None | None | `ClaimFailure { stream_id, error_code: 11 }` | **No** (Isolated per stream) |
-| **Token transfer failed** | Aggregated `try_transfer` for an asset rejects/fails | Rollback stream updates for this asset only | None | `ClaimFailure { stream_id, error_code: 28 }` for each stream of this token | **No** (Other assets proceed) |
+| **Math overflow** | Accrual arithmetic, `withdrawn + amount`, or the per-asset total would overflow | None | None | `ClaimFailure { stream_id, error_code: 11 }` | **No** (Isolated per stream) |
+| **Token transfer failed** | Aggregated `try_transfer` for any asset rejects/fails | Discarded by the host | Discarded by the host | Reverts with `StreamError::RecipientPayoutFailed` (code 28) | **Yes** (see §5) |
 | **Successful claim** | Stream active, `available > 0`, token transfer succeeds | `s.withdrawn += amount`, marks `Depleted` if drained | `Withdrawn` published per stream | Stream ID in `successful_stream_ids`; asset total in `transfers` | **No** (Succeeds) |
 
 ---
@@ -125,23 +127,20 @@ This demonstrates why `MAX_PAGE_SIZE = 50` is the mathematically and ledger-limi
 
 ---
 
-## 5. Checks-Effects-Interactions (CEI) & Rollback Semantics
+## 5. Checks-Effects-Interactions (CEI) & Payout Failure
 
 To uphold the protocol's strict CEI security model:
-1. **Preamble & Grouping**: Streams are filtered and balances accumulated by token asset into `pending_claims`.
-2. **Checks-Effects**: Stream storage entries are updated (`withdrawn` incremented, status updated to `Depleted` if drained) *before* external token dispatch. This prevents reentrancy double-spending during token transfer callbacks.
-3. **Interactions**: Aggregated payout is executed via `push` (`TokenClient::try_transfer`).
-4. **Isolated Rollback**: If a token's `try_transfer` fails:
-   - Stream storage modifications for that token are restored to their exact `original_withdrawn` and `Active` status.
-   - No `Withdrawn` event is published for failed streams.
-   - Payouts for any other tokens in the transaction proceed unimpeded.
+1. **Checks**: Each stream on the page is authorized for the caller and priced with the same accrual path `withdraw_max` uses. Streams that fail a check are recorded in `failed_streams` and left untouched.
+2. **Effects**: For every stream that passes, `withdrawn` is incremented (status becomes `Depleted` if drained), the record is persisted, and `Withdrawn` is published — all *before* any token is called. Amounts are summed per asset.
+3. **Interactions**: Only after every effect is written, one aggregated payout per asset is executed via `push` (`TokenClient::try_transfer`).
+4. **Payout failure reverts the call**: If any asset's transfer fails, `withdraw_all` returns `StreamError::RecipientPayoutFailed` and the host discards every effect of the transaction. Restoring stream state *after* an external call — instead of reverting — would be exactly the reentrancy hazard CEI exists to prevent, and a published `Withdrawn` event cannot be un-published. This matches `withdraw_many`'s documented behaviour.
 
 ---
 
 ## 6. Frontend Integration
 
 The dashboard provides a dedicated **⚡ Claim all** button in the "Your streams" card:
-- Executes `withdrawAllFromStreams(address)`.
+- Executes `withdrawAllFromStreams(address, signTransaction)`.
 - Aggregates multi-asset balances and notifies the user with formatted token amounts and asset symbols.
 - Displays continuation token notices if `nextOffset !== null`, prompting the user to claim subsequent pages.
 - Automatically refreshes all updated streams in the UI.

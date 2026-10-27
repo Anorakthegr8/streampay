@@ -68,8 +68,8 @@
     "claim_cost": {
       "streampay": {
         "operation": "withdraw / withdraw_max",
-        "cpu_instructions": 347082,
-        "memory_bytes": 138899,
+        "cpu_instructions": 384170,
+        "memory_bytes": 153255,
         "event_bytes": 236,
         "native_fee": "0.000245 XLM (2,450 stroops)",
         "usd_stellar": 0.000029,
@@ -97,8 +97,8 @@
     "cancel_cost": {
       "streampay": {
         "operation": "cancel_stream",
-        "cpu_instructions": 523563,
-        "memory_bytes": 171201,
+        "cpu_instructions": 591737,
+        "memory_bytes": 197100,
         "event_bytes": 248,
         "native_fee": "0.000320 XLM (3,200 stroops)",
         "usd_stellar": 0.000038,
@@ -126,8 +126,8 @@
     "create_cost": {
       "streampay": {
         "operation": "create_stream",
-        "cpu_instructions": 541598,
-        "memory_bytes": 210434,
+        "cpu_instructions": 546281,
+        "memory_bytes": 214280,
         "native_fee": "0.000350 XLM (3,500 stroops)",
         "usd_stellar": 0.000042
       },

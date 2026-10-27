@@ -334,7 +334,7 @@ a hot path is measured, not estimated.
 
 ## 7. Batch Claim-All Iteration Footprint & Ledger-Limit Bounds
 
-With the introduction of `withdraw_all`, StreamPay provides its first multi-stream iteration path. Full architectural details and the partial-failure decision matrix are documented in [`docs/CLAIM_ALL.md`](CLAIM_ALL.md).
+`withdraw_all` iterates the recipient's own stream index, one page per transaction (unlike `withdraw_many`, which takes an explicit id list). Full architectural details and the partial-failure decision matrix are documented in [`docs/CLAIM_ALL.md`](CLAIM_ALL.md).
 
 ### 7.1 Footprint Measurements (1 / 10 / 50 / 60 Streams)
 

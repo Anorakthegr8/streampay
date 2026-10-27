@@ -2,7 +2,7 @@
   "protocol": "StreamPay",
   "network": "Stellar / Soroban",
   "version": "v0.4.0",
-  "measured_at": "2026-10-19",
+  "measured_at": "2026-10-27",
   "storage": {
     "stream_struct_bytes": 444,
     "stream_key_bytes": 40,
@@ -13,71 +13,63 @@
     "storage_keys_mutated_on_cancel": 1
   },
   "rent_economics": {
-    "rent_rate_stroops_per_byte_ledger": 0.0100,
-    "seconds_per_ledger": 5.0,
-    "rent_stroops_per_second": 0.9680,
-    "rent_xlm_per_second": 0.0000000968,
-    "rent_stroops_per_30d": 2509056.0,
+    "rent_rate_stroops_per_byte_ledger": 0.01,
+    "seconds_per_ledger": 5,
+    "rent_stroops_per_second": 0.968,
+    "rent_xlm_per_second": 9.68e-8,
+    "rent_stroops_per_30d": 2509056,
     "rent_xlm_per_30d": 0.250906,
     "initial_prepaid_ledgers": 500000,
-    "initial_prepaid_xlm": 0.2420
+    "initial_prepaid_xlm": 0.242
   },
   "operations": {
     "create_stream": {
-      "cpu_instructions": 541598,
-      "memory_bytes": 210434,
+      "cpu_instructions": 546281,
+      "memory_bytes": 214280,
       "event_bytes": 396,
       "estimated_fee_stroops": 3500,
-      "estimated_fee_xlm": 0.000350
+      "estimated_fee_xlm": 0.00035
     },
     "withdraw": {
-      "cpu_instructions": 347082,
-      "memory_bytes": 138899,
+      "cpu_instructions": 384170,
+      "memory_bytes": 153255,
       "event_bytes": 236,
       "estimated_fee_stroops": 2450,
       "estimated_fee_xlm": 0.000245
     },
     "withdraw_max": {
-      "cpu_instructions": 338663,
-      "memory_bytes": 134329,
+      "cpu_instructions": 399417,
+      "memory_bytes": 154039,
       "event_bytes": 236,
       "estimated_fee_stroops": 2410,
       "estimated_fee_xlm": 0.000241
     },
     "cancel_stream": {
-      "cpu_instructions": 523563,
-      "memory_bytes": 171201,
+      "cpu_instructions": 591737,
+      "memory_bytes": 197100,
       "event_bytes": 248,
       "estimated_fee_stroops": 3200,
-      "estimated_fee_xlm": 0.000320
+      "estimated_fee_xlm": 0.00032
     },
     "top_up": {
-      "cpu_instructions": 447290,
-      "memory_bytes": 167390,
-      "event_bytes": 76,
-      "estimated_fee_stroops": 2800,
-      "estimated_fee_xlm": 0.000280
+      "cpu_instructions": 495406,
+      "memory_bytes": 183484,
+      "event_bytes": 76
     },
     "get_stream": {
-      "cpu_instructions": 66664,
-      "memory_bytes": 40243,
-      "event_bytes": 0,
-      "estimated_fee_stroops": 0,
-      "estimated_fee_xlm": 0.0
+      "cpu_instructions": 70846,
+      "memory_bytes": 43689,
+      "event_bytes": 0
     },
     "available": {
-      "cpu_instructions": 58284,
-      "memory_bytes": 39461,
-      "event_bytes": 0,
-      "estimated_fee_stroops": 0,
-      "estimated_fee_xlm": 0.0
+      "cpu_instructions": 92752,
+      "memory_bytes": 53702,
+      "event_bytes": 0
     },
     "sender_streams_page_5": {
-      "cpu_instructions": 52369,
-      "memory_bytes": 25006,
-      "event_bytes": 0,
-      "estimated_fee_stroops": 0,
-      "estimated_fee_xlm": 0.0
+      "cpu_instructions": 50763,
+      "memory_bytes": 25414,
+      "event_bytes": 0
     }
   }
 }

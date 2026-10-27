@@ -18,6 +18,7 @@ import {
   type StreamView,
 } from "@/lib/stellar";
 import { BATCH_CLAIM_ENABLED } from "@/lib/withdrawal";
+import { formatAmount } from "@/lib/format";
 import { loadStreamIds, saveStreamId } from "@/lib/storage";
 import { useStreamEvents, toStreamView } from "@/lib/useStreamEvents";
 import { useWallet } from "@/lib/wallet-context";
@@ -89,7 +90,7 @@ export default function Home() {
     if (!address) return;
     setClaimAllLoading(true);
     try {
-      const res = await withdrawAllFromStreams(address);
+      const res = await withdrawAllFromStreams(address, signTransaction);
       if (res.successfulStreamIds.length === 0) {
         if (res.failedStreams.length > 0) {
           toast.info(
@@ -452,7 +453,6 @@ export default function Home() {
             {claimAllLoading ? "Claiming all..." : "⚡ Claim all"}
           </button>
           {lastEventAt && (
-
             <span className="muted" style={{ fontSize: "12px" }}>
               Last live event: {lastEventAt.toLocaleTimeString()}
             </span>
