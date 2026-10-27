@@ -357,6 +357,25 @@
       "mutating": true
     },
     {
+      "name": "withdraw_all",
+      "doc": "Claims every stream on one page of the recipient's index in one transaction,\npaying one aggregated transfer per asset instead of one per stream.\n\nThe page is `page_bounds` (default: offset 0, [`MAX_PAGE_SIZE`] streams; a\n`limit` of 0 or above the cap is clamped to it), which keeps a call under the\nledger-entry limit. `next_offset` is `Some` while the index has more streams.\n\nEach stream goes through the same checks and accrual math as `withdraw_max`.\nA stream that fails one of them before paying (not yours, not active, nothing\naccrued, overflow) is reported in `failed_streams` and skipped; the others\nstill pay. As in `withdraw_many`, a refused token transfer is the exception:\nstate and `Withdrawn` events are written before tokens move, so\n[`StreamError::RecipientPayoutFailed`] reverts the whole call.",
+      "args": [
+        {
+          "name": "recipient",
+          "type": "address"
+        },
+        {
+          "name": "page_bounds",
+          "type": {
+            "option": "PageBounds"
+          }
+        }
+      ],
+      "returns": "WithdrawAllResult",
+      "error": "StreamError",
+      "mutating": true
+    },
+    {
       "name": "cancel_stream",
       "doc": "Cancels a stream: pays the recipient their accrued-but-unwithdrawn\nbalance and refunds the sender the unaccrued remainder, atomically.\n\nCallable by the sender always, and by the recipient only if the stream\nwas created with `cancelable = true`. Cancelling an already-cancelled\nor depleted stream reverts with [`StreamError::StreamNotActive`].\n\nEach payout leg maps a token-side failure to its own code —\n[`StreamError::RecipientPayoutFailed`] for the recipient's accrued\nshare and [`StreamError::SenderRefundFailed`] for the sender's refund —\nand any failure rolls the whole cancellation back: the stream stays\n`Active`, `withdrawn` is restored, and no event survives.\n\n# Ordering against `withdraw` (same-ledger race)\n\nThe counterpart of the ordering documented on\n[`StreamingPayments::withdraw`]: cancellation is atomic and sees the\n`withdrawn` balance as of *its* execution point.\n\n* If the recipient's `withdraw` executes first, the cancel splits the\n  remainder only (`streamed − withdrawn` to the recipient,\n  `deposit − streamed` to the sender). If that withdrawal already\n  drained the stream to `Depleted`, the cancel reverts with\n  [`StreamError::StreamNotActive`] (code 5).\n* If this cancel executes first, the stream is `Cancelled` and any\n  later `withdraw` / `withdraw_max` reverts with\n  [`StreamError::StreamNotActive`] (code 5).\n\nLast write wins in execution order; no interleaving exists within a\nledger, and the losing call leaves state and balances untouched.\nPinned by the `race_*` regression tests in `test.rs`; see\n`docs/ARCHITECTURE.md` §6.1 for the race table.",
       "args": [
@@ -2578,6 +2597,88 @@
           "name": "is_complete",
           "type": "bool",
           "doc": ""
+        }
+      ]
+    },
+    {
+      "name": "PageBounds",
+      "doc": "Pagination bounds for [`crate::StreamingPayments::withdraw_all`]: which slice of the\nrecipient's stream index to claim. `limit` is clamped to [`MAX_PAGE_SIZE`]; `0` means\n\"the largest page\".",
+      "fields": [
+        {
+          "name": "offset",
+          "type": "u32",
+          "doc": ""
+        },
+        {
+          "name": "limit",
+          "type": "u32",
+          "doc": ""
+        }
+      ]
+    },
+    {
+      "name": "AssetTransfer",
+      "doc": "Total paid out in one asset by a [`crate::StreamingPayments::withdraw_all`] call.",
+      "fields": [
+        {
+          "name": "token",
+          "type": "address",
+          "doc": ""
+        },
+        {
+          "name": "amount",
+          "type": "i128",
+          "doc": ""
+        }
+      ]
+    },
+    {
+      "name": "ClaimFailure",
+      "doc": "A stream [`crate::StreamingPayments::withdraw_all`] skipped, with the numeric code of\nthe [`crate::StreamError`] that skipped it.",
+      "fields": [
+        {
+          "name": "stream_id",
+          "type": "u64",
+          "doc": ""
+        },
+        {
+          "name": "error_code",
+          "type": "u32",
+          "doc": ""
+        }
+      ]
+    },
+    {
+      "name": "WithdrawAllResult",
+      "doc": "The answer of [`crate::StreamingPayments::withdraw_all`] for one page of the\nrecipient's stream index.",
+      "fields": [
+        {
+          "name": "transfers",
+          "type": {
+            "vec": "AssetTransfer"
+          },
+          "doc": "Payouts aggregated per asset: one token transfer each."
+        },
+        {
+          "name": "successful_stream_ids",
+          "type": {
+            "vec": "u64"
+          },
+          "doc": "Streams that paid out, in index order."
+        },
+        {
+          "name": "failed_streams",
+          "type": {
+            "vec": "ClaimFailure"
+          },
+          "doc": "Streams that were skipped, with the reason."
+        },
+        {
+          "name": "next_offset",
+          "type": {
+            "option": "u32"
+          },
+          "doc": "Offset of the next page, or `None` once the index is exhausted."
         }
       ]
     },

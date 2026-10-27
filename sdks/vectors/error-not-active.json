@@ -1,7 +1,7 @@
 {
   "schema": "streampay-vector/v1",
   "name": "error-not-active",
-  "specFingerprint": "095286849ccda0146a5afb32794b85ccd003df2a39c20b9b1d280bbaf375a712",
+  "specFingerprint": "46165070c5fee81426fcd7178349e49b05256943fdd498145aeda995f54e35c9",
   "provenance": "WithdrawMax envelope against a cancelled stream; result is ScVal::Error(SCError::Contract(code)) with the StreamNotActive code from frontend/lib/errors.ts.",
   "transactionEnvelopeXdr": "AAAAAgAAAADqSmxj4pxSCr71UHsTLsX5lUd2rr6+e5JCHuppFEbSLAABhqAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAGAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYAAAAMd2l0aGRyYXdfbWF4AAAAAQAAAAUAAAAAAAAAAQAAAAAAAAAAAAAAARRG0iwAAABABS0nFdfv2TXks3L3XXKozJgfT6KOcCdcH3qkxZ9u8eRMktjWlFjZbrPXpzaoaCqRvyItvsthWxcbXwvipFByBA==",
   "resultXdr": "AAAAAgAAAAAAAAAF",
