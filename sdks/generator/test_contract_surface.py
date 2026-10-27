@@ -14,7 +14,10 @@ property of the repository rather than a one-off manual check:
   contract's own ``event_registry`` test generates from ``events.rs``;
 * the generated TypeScript codecs must declare every name exactly once — an
   entrypoint returning a ``<fn>_result`` struct collides with that struct's own
-  codec unless the emitter resolves it.
+  codec unless the emitter resolves it;
+* every file read and write in ``sdks/generator`` must name ``encoding``
+  explicitly, because the spec fingerprint is a sha256 over text and a
+  contributor's platform locale otherwise changes the digest CI sees.
 """
 from __future__ import annotations
 
@@ -29,6 +32,31 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import check_contract_surface as guard  # noqa: E402
 
 REGISTRY_PATH = guard.ROOT / "schemas" / "events" / "registry.json"
+
+FILE_IO_CALL = re.compile(r"\.(?:read_text|write_text)\(|(?<![.\w])open\(")
+
+
+def guard_calls_without_encoding(source: str) -> list[int]:
+    """Line numbers of file-IO calls in ``source`` that omit ``encoding=``.
+
+    A call's arguments are the balanced paren group that follows its name; the
+    default-encoding reads this looks for are the zero-argument and
+    path-only forms, both of which resolve their encoding from the platform
+    locale. Comments are not parsed, so a commented-out call reads as flagged —
+    intentional: the fix is to delete the line or give it an encoding.
+    """
+    offenders: list[int] = []
+    for match in FILE_IO_CALL.finditer(source):
+        depth, index = 1, match.end()
+        while index < len(source) and depth:
+            if source[index] == "(":
+                depth += 1
+            elif source[index] == ")":
+                depth -= 1
+            index += 1
+        if "encoding=" not in source[match.start():index]:
+            offenders.append(source[: match.start()].count("\n") + 1)
+    return offenders
 
 _RUST = {
     "address": "Address",
@@ -81,7 +109,7 @@ class SpecCoverageTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.contract = guard.parse_contract()
         cls.expected = guard.build_spec(cls.contract)
-        cls.spec = json.loads(guard.SPEC_PATH.read_text())
+        cls.spec = json.loads(guard.SPEC_PATH.read_text(encoding="utf-8"))
         cls.contract_operations = {
             function["name"]
             for function in cls.contract["functions"]
@@ -106,7 +134,7 @@ class SpecCoverageTest(unittest.TestCase):
         )
 
     def test_spec_covers_the_surface_registry_entrypoints(self) -> None:
-        registry_source = (guard.CONTRACT / "surface.rs").read_text()
+        registry_source = (guard.CONTRACT / "surface.rs").read_text(encoding="utf-8")
         start = registry_source.find("pub const fn entrypoints")
         self.assertNotEqual(start, -1, "surface.rs has no entrypoints() registry")
         brace = registry_source.find("{", start)
@@ -129,7 +157,7 @@ class SpecCoverageTest(unittest.TestCase):
         )
 
     def test_parser_sees_every_public_fn_including_the_constructor(self) -> None:
-        lib = (guard.CONTRACT / "lib.rs").read_text()
+        lib = (guard.CONTRACT / "lib.rs").read_text(encoding="utf-8")
         start = lib.find("impl StreamingPayments {")
         brace = lib.find("{", start)
         body = lib[brace : guard.match_delimiter(lib, brace, "{", "}")]
@@ -167,7 +195,7 @@ class SpecCoverageTest(unittest.TestCase):
         self.assertTrue({"StreamsCreated", "FeeCharged"} <= events)
 
     def test_events_match_the_canonical_event_registry(self) -> None:
-        registry = json.loads(REGISTRY_PATH.read_text())["events"]
+        registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))["events"]
         spec_events = {event["name"]: event for event in self.spec["events"]}
         self.assertEqual(sorted(spec_events), sorted(registry))
         for name, entry in registry.items():
@@ -181,7 +209,7 @@ class SpecCoverageTest(unittest.TestCase):
                     )
 
     def test_shared_types_match_the_canonical_event_registry(self) -> None:
-        definitions = json.loads(REGISTRY_PATH.read_text())["definitions"]
+        definitions = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))["definitions"]
         for name, entry in definitions.items():
             with self.subTest(type=name):
                 self.assertEqual(canonical(self.spec, name), entry["canonical"])
@@ -214,7 +242,7 @@ class SpecCoverageTest(unittest.TestCase):
         self.assertEqual(guard.compare(self.spec, self.expected), [])
 
     def test_fingerprint_matches_the_spec(self) -> None:
-        recorded = guard.FINGERPRINT_PATH.read_text().strip()
+        recorded = guard.FINGERPRINT_PATH.read_text(encoding="utf-8").strip()
         self.assertEqual(recorded, guard.fingerprint(self.spec))
 
 
@@ -237,7 +265,7 @@ class GeneratedCodecNamesTest(unittest.TestCase):
         import generate as generator
 
         cls.emitter = emitter
-        cls.spec = json.loads(guard.SPEC_PATH.read_text())
+        cls.spec = json.loads(guard.SPEC_PATH.read_text(encoding="utf-8"))
         # outputs() installs its inputs as module globals; restore them afterwards
         # so a later test in this process cannot see the synthetic spec.
         cls.saved = (emitter.SPEC, emitter.FINGERPRINT, emitter.ERRORS)
@@ -320,6 +348,82 @@ class GeneratedCodecNamesTest(unittest.TestCase):
         )
         self.assertIn("export function decodeDemoResult(value: unknown): DemoResult {", generated)
         self.assertIn("export function decodeDemoCallResult(value: xdr.ScVal): DemoResult {", generated)
+
+
+class GeneratorFileEncodingTest(unittest.TestCase):
+    """Every file the generators touch must be read and written as UTF-8.
+
+    ``Path.read_text`` / ``write_text`` and the builtin ``open`` default to
+    ``locale.getpreferredencoding()``, which is cp1252 on a Windows checkout.
+    The spec carries non-ASCII doc text (em dashes, ``Σ`` in the fee-series
+    comments), so a Windows run decoded the committed spec through cp1252, got a
+    different dict, and hashed a *different fingerprint* from the one Linux CI
+    computes over the identical committed bytes: ``46165070…`` locally against
+    ``9b8829c6…`` in CI, which reddened ``Spec — schema guard / coverage`` and
+    the ``TypeScript SDK`` staleness gate on the very same commit. This is the
+    same bug class ``a3af379`` fixed for the error-catalog stamp, so the rule is
+    now enforced by the suite instead of left to the next platform.
+
+    The guard is tested against a known-positive snippet first: a checker that
+    silently found nothing would report this repository as clean forever.
+    """
+
+    GENERATOR_DIR = Path(__file__).resolve().parent
+
+    @staticmethod
+    def snippet(method: str, arguments: str) -> str:
+        """Build source text for the fixtures without embedding the pattern."""
+        return f"value = SPEC.{method}{arguments}\n"
+
+    @staticmethod
+    def builtin_fixture(arguments: str) -> str:
+        """The builtin's own call text, assembled so the guard cannot flag it.
+
+        Writing it out literally would make this file its own false positive —
+        the guard reads raw source text, not a syntax tree.
+        """
+        return 'with o' + f'pen(HERE / "x.json"{arguments}) as handle:\n    pass\n'
+
+    def test_the_guard_fires_on_a_default_encoding_read(self) -> None:
+        bad = self.snippet("read_text", "()")
+        self.assertEqual(guard_calls_without_encoding(bad), [1], "the guard must flag it")
+
+    def test_the_guard_fires_on_a_default_encoding_open(self) -> None:
+        bad = self.builtin_fixture("")
+        self.assertEqual(guard_calls_without_encoding(bad), [1], "the guard must flag it")
+
+    def test_the_guard_accepts_explicit_encodings(self) -> None:
+        good = "".join(
+            (
+                self.snippet("read_text", '(encoding="utf-8")'),
+                self.snippet("write_text", '(body, encoding="utf-8", newline="\\\\n")'),
+                self.builtin_fixture(', encoding="utf-8"'),
+            )
+        )
+        self.assertEqual(guard_calls_without_encoding(good), [], "nothing to flag here")
+
+    def test_generator_scripts_name_their_encoding(self) -> None:
+        offenders = {
+            path.name: guard_calls_without_encoding(path.read_text(encoding="utf-8"))
+            for path in sorted(self.GENERATOR_DIR.glob("*.py"))
+        }
+        offenders = {name: lines for name, lines in offenders.items() if lines}
+        self.assertEqual(
+            offenders,
+            {},
+            "generator file IO must pass encoding explicitly — the platform "
+            f"locale otherwise changes the spec fingerprint: {offenders}",
+        )
+
+    def test_the_recorded_fingerprint_is_the_utf8_digest_of_the_spec(self) -> None:
+        """Pin the cross-platform property directly, not just the source shape."""
+        raw = guard.SPEC_PATH.read_bytes()
+        spec = json.loads(raw.decode("utf-8"))
+        self.assertEqual(
+            guard.fingerprint(spec),
+            guard.FINGERPRINT_PATH.read_text(encoding="utf-8").strip(),
+            "FINGERPRINT must be the sha256 of the spec decoded as UTF-8",
+        )
 
 
 if __name__ == "__main__":
