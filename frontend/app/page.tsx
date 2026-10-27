@@ -273,7 +273,11 @@ export default function Home() {
             BATCH_CLAIM_ENABLED
               ? async (ids) => {
                   try {
-                    const receipt = await claimStreamsWithReceipt(address, ids);
+                    const receipt = await claimStreamsWithReceipt(
+                      address,
+                      ids,
+                      signTransaction
+                    );
                     const settled = receipt.rows.filter((row) => row.settled);
                     const skipped = receipt.rows.length - settled.length;
                     toast.success(

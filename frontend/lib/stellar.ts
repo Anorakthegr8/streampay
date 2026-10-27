@@ -632,12 +632,16 @@ export interface BatchClaimReceipt {
  * pay is reported in the rows instead of failing the call — one exhausted or
  * cancelled stream no longer blocks the other nineteen.
  *
+ * `signer` is the active wallet adapter's signing callback, exactly as on the
+ * single-stream claims.
+ *
  * `strict` mirrors the contract's all-or-nothing flag: with it set, the first
  * entry that cannot pay aborts the whole batch.
  */
 export async function claimStreamsWithReceipt(
   recipient: string,
   streamIds: string[],
+  signer: TxSigner,
   strict = false
 ): Promise<BatchClaimReceipt> {
   const selection = validateBatchSelection(streamIds);
@@ -681,7 +685,8 @@ export async function claimStreamsWithReceipt(
               code,
             };
           });
-        }
+        },
+        signer
       );
 
       if (txHash) {
