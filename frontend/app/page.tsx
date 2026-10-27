@@ -8,6 +8,7 @@ import {
   withdrawFromStream,
   withdrawMaxFromStream,
   claimStreamsWithReceipt,
+  withdrawAllFromStreams,
   topUpStream,
   cancelStream,
   readStream,
@@ -17,6 +18,7 @@ import {
   type StreamView,
 } from "@/lib/stellar";
 import { BATCH_CLAIM_ENABLED } from "@/lib/withdrawal";
+import { formatAmount } from "@/lib/format";
 import { loadStreamIds, saveStreamId } from "@/lib/storage";
 import { useStreamEvents, toStreamView } from "@/lib/useStreamEvents";
 import { useWallet } from "@/lib/wallet-context";
@@ -34,6 +36,7 @@ export default function Home() {
   const [streams, setStreams] = useState<StreamView[]>([]);
   const [lookupId, setLookupId] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
+  const [claimAllLoading, setClaimAllLoading] = useState(false);
 
   async function onConnected(addr: string) {
     // Rehydrate the cached list (ids only; state is always read fresh).
@@ -80,6 +83,50 @@ export default function Home() {
       for (const s of found) saveStreamId(address, s.id);
     } catch (e) {
       toast.error(describeError(e));
+    }
+  }
+
+  async function handleClaimAll() {
+    if (!address) return;
+    setClaimAllLoading(true);
+    try {
+      const res = await withdrawAllFromStreams(address, signTransaction);
+      if (res.successfulStreamIds.length === 0) {
+        if (res.failedStreams.length > 0) {
+          toast.info(
+            `No funds available to claim across ${res.failedStreams.length} stream(s).`
+          );
+        } else {
+          toast.info("No claimable streams found.");
+        }
+      } else {
+        const transferSummaries = await Promise.all(
+          res.transfers.map(async (t) => {
+            try {
+              const meta = await fetchAssetMeta(t.token);
+              return `${formatAmount(t.amount, meta.decimals)} ${meta.code}`;
+            } catch {
+              return `${t.amount} units`;
+            }
+          })
+        );
+        const transferText = transferSummaries.join(", ");
+        let msg = `Successfully claimed ${transferText} across ${res.successfulStreamIds.length} stream(s).`;
+        if (res.failedStreams.length > 0) {
+          msg += ` (${res.failedStreams.length} skipped or non-claimable)`;
+        }
+        if (res.nextOffset !== null) {
+          msg += ` Note: More streams remain (continuation offset ${res.nextOffset}). Click "Claim all" again to process the next page.`;
+        }
+        toast.success(msg);
+        await Promise.all(
+          res.successfulStreamIds.map((id) => refresh(id).catch(() => null))
+        );
+      }
+    } catch (e) {
+      toast.error(describeError(e));
+    } finally {
+      setClaimAllLoading(false);
     }
   }
 
@@ -161,6 +208,9 @@ export default function Home() {
             <h1>{t("home.title")}</h1>
           </div>
           <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+            <Link href="/benchmarks" style={{ color: "var(--accent2)", fontSize: "0.85rem", textDecoration: "none" }}>
+              Benchmarks 📊
+            </Link>
             <Link href="/docs" style={{ color: "#38bdf8", fontSize: "0.85rem", textDecoration: "none" }}>
               {t("chrome.apiDocs")}
             </Link>
@@ -199,6 +249,17 @@ export default function Home() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap" }}>
         <h1>{t("home.title")}</h1>
         <div style={{ display: "flex", gap: "16px", alignItems: "baseline" }}>
+          <Link
+            href="/benchmarks"
+            style={{
+              color: "var(--accent2)",
+              textDecoration: "none",
+              fontSize: "13px",
+              fontWeight: 600,
+            }}
+          >
+            Benchmarks 📊
+          </Link>
           <a
             href="/simulator"
             style={{
@@ -377,6 +438,19 @@ export default function Home() {
         <div className="row" style={{ alignItems: "center" }}>
           <button onClick={discover} title={t("home.discoverOnchain")}>
             {t("home.discoverOnchain")}
+          </button>
+          <button
+            type="button"
+            onClick={handleClaimAll}
+            disabled={claimAllLoading}
+            title="Claim all accrued funds across all your streams in one transaction"
+            style={{
+              background: "var(--accent, #0ea5e9)",
+              color: "#fff",
+              fontWeight: 600,
+            }}
+          >
+            {claimAllLoading ? "Claiming all..." : "⚡ Claim all"}
           </button>
           {lastEventAt && (
             <span className="muted" style={{ fontSize: "12px" }}>

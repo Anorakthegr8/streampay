@@ -26,7 +26,7 @@ class ErrorCatalogTest(unittest.TestCase):
     def test_catalog_reader_matches_the_contract_error_enum(self) -> None:
         contract = {
             item["code"]: item["name"]
-            for item in guard.parse_errors((guard.CONTRACT / "errors.rs").read_text())
+            for item in guard.parse_errors((guard.CONTRACT / "errors.rs").read_text(encoding="utf-8"))
         }
         catalog = dict(generate.load_error_catalog())
         self.assertEqual(catalog, contract)
@@ -47,13 +47,13 @@ class ErrorCatalogTest(unittest.TestCase):
 class ConformanceVectorTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.spec = json.loads(guard.SPEC_PATH.read_text())
-        cls.fingerprint = guard.FINGERPRINT_PATH.read_text().strip()
+        cls.spec = json.loads(guard.SPEC_PATH.read_text(encoding="utf-8"))
+        cls.fingerprint = guard.FINGERPRINT_PATH.read_text(encoding="utf-8").strip()
         cls.functions = {item["name"]: item for item in cls.spec["functions"]}
         cls.events = {item["name"]: item for item in cls.spec["events"]}
         cls.catalog = dict(generate.load_error_catalog())
         cls.vectors = {
-            path.name: json.loads(path.read_text()) for path in sorted(VECTORS_DIR.glob("*.json"))
+            path.name: json.loads(path.read_text(encoding="utf-8")) for path in sorted(VECTORS_DIR.glob("*.json"))
         }
 
     def test_suite_is_present(self) -> None:

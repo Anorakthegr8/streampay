@@ -44,7 +44,7 @@ CATALOG_PATH = ROOT / "frontend" / "lib" / "errors.ts"
 
 
 def load_spec() -> dict:
-    return json.loads(SPEC_PATH.read_text())
+    return json.loads(SPEC_PATH.read_text(encoding="utf-8"))
 
 
 def load_error_catalog(path: Path = CATALOG_PATH) -> list[tuple[int, str]]:
@@ -53,7 +53,7 @@ def load_error_catalog(path: Path = CATALOG_PATH) -> list[tuple[int, str]]:
     The SDKs must not keep a second error table: codes and names come from
     ``frontend/lib/errors.ts``, which CI already gates against ``errors.rs``.
     """
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     entries = [
         (int(code), name)
         for code, name in re.findall(
@@ -105,7 +105,7 @@ def main() -> int:
     stale = False
     for path, content in targets.items():
         if args.check:
-            existing = path.read_text() if path.exists() else ""
+            existing = path.read_text(encoding="utf-8") if path.exists() else ""
             if existing != content:
                 stale = True
                 diff = difflib.unified_diff(
@@ -117,7 +117,7 @@ def main() -> int:
                 sys.stderr.writelines(list(diff)[:80])
         else:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content)
+            path.write_text(content, encoding="utf-8", newline="\n")
             print(f"wrote {path.relative_to(ROOT)}")
     if args.check and stale:
         print(

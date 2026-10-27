@@ -34,6 +34,41 @@ def pascal(name: str) -> str:
     return "".join(part.title() for part in name.split("_"))
 
 
+def _type_codec_names() -> set:
+    """The identifiers claimed by the type codecs (`encode<X>` / `decode<X>`).
+
+    Struct, enum and union codecs are named after the type itself, so the
+    `WithdrawAllResult` struct owns `decodeWithdrawAllResult`. Every operation
+    then wants `decode<Pascal(fn)>Result` — and because this contract names a
+    result struct `<fn>_result`, `withdraw_all` asks for exactly the same
+    identifier. Emitting both yields a file that does not compile ("Cannot
+    redeclare exported variable"), so the collision is resolved here rather than
+    by hand-editing generated output.
+    """
+    names = set()
+    for group in ("structs", "enums", "unions"):
+        for entry in SPEC.get(group, []):
+            names.add(f"decode{entry['name']}")
+            names.add(f"encode{entry['name']}")
+    return names
+
+
+def result_decoder_name(function_name: str) -> str:
+    """The exported decoder for one operation's return ScVal."""
+    base = f"decode{pascal(function_name)}Result"
+    if base in _type_codec_names():
+        return f"decode{pascal(function_name)}CallResult"
+    return base
+
+
+def args_encoder_name(function_name: str) -> str:
+    """The exported encoder for one operation's arguments."""
+    base = f"encode{pascal(function_name)}Args"
+    if base in _type_codec_names():
+        return f"encode{pascal(function_name)}CallArgs"
+    return base
+
+
 def jsdoc(doc: str, indent: str = "") -> str:
     if not doc:
         return ""
@@ -417,9 +452,10 @@ def generate_generated_ts() -> str:
     for function in SPEC["functions"]:
         name = function["name"]
         args_type = pascal(name) + "Args"
+        encoder = args_encoder_name(name)
         if function["args"]:
             lines.append(
-                f"export function encode{pascal(name)}Args(args: {args_type}): xdr.ScVal[] {{"
+                f"export function {encoder}(args: {args_type}): xdr.ScVal[] {{"
             )
             lines.append("  return [")
             for arg in function["args"]:
@@ -431,7 +467,7 @@ def generate_generated_ts() -> str:
             lines.append("}")
         else:
             lines.append(
-                f"export function encode{pascal(name)}Args(): xdr.ScVal[] {{"
+                f"export function {encoder}(): xdr.ScVal[] {{"
             )
             lines.append("  return [];")
             lines.append("}")
@@ -439,7 +475,7 @@ def generate_generated_ts() -> str:
 
         returns = function["returns"]
         lines.append(
-            f"export function decode{pascal(name)}Result(value: xdr.ScVal): {value_type(returns)} {{"
+            f"export function {result_decoder_name(name)}(value: xdr.ScVal): {value_type(returns)} {{"
         )
         if returns == "void":
             lines.append("  void value;")
@@ -647,8 +683,8 @@ def generate_methods_ts() -> str:
     type_imports: list[str] = []
     for function in SPEC["functions"]:
         name = pascal(function["name"])
-        imported.append(f"encode{name}Args")
-        imported.append(f"decode{name}Result")
+        imported.append(args_encoder_name(function["name"]))
+        imported.append(result_decoder_name(function["name"]))
         if function["args"]:
             type_imports.append(f"{name}Args")
         returns = function["returns"]
@@ -699,12 +735,16 @@ def generate_methods_ts() -> str:
         method = camel(function["name"])
         returns = value_type(function["returns"])
         params = f"args: {name}Args" if function["args"] else ""
-        args_expr = f"encode{name}Args(args)" if function["args"] else f"encode{name}Args()"
+        args_expr = (
+            f"{args_encoder_name(function['name'])}(args)"
+            if function["args"]
+            else f"{args_encoder_name(function['name'])}()"
+        )
         lines.append(jsdoc(function.get("doc", ""), "  ").rstrip())
         lines.append(f"  {method}({params}): Promise<{returns}> {{")
         lines.append(
             f"    return this.call(METHODS.{method}, {args_expr}, "
-            f"{'true' if function['mutating'] else 'false'}, decode{name}Result);"
+            f"{'true' if function['mutating'] else 'false'}, {result_decoder_name(function['name'])});"
         )
         lines.append("  }")
         lines.append("")

@@ -713,15 +713,15 @@ def evaluate_int(expression: str) -> int:
 
 
 def parse_contract() -> dict:
-    lib = (CONTRACT / "lib.rs").read_text()
+    lib = (CONTRACT / "lib.rs").read_text(encoding="utf-8")
     # Types may be declared in lib.rs itself (StreamInput) as well as in the
     # domain modules; constants live only in the modules.
     sources = {
-        name: (CONTRACT / f"{name}.rs").read_text() for name in contract_modules(lib)
+        name: (CONTRACT / f"{name}.rs").read_text(encoding="utf-8") for name in contract_modules(lib)
     }
     type_sources = {"lib": lib, **sources}
-    events_source = (CONTRACT / "events.rs").read_text()
-    errors_source = (CONTRACT / "errors.rs").read_text()
+    events_source = (CONTRACT / "events.rs").read_text(encoding="utf-8")
+    errors_source = (CONTRACT / "errors.rs").read_text(encoding="utf-8")
 
     functions = parse_functions(lib)
     structs, enums, unions = parse_structs_and_enums(type_sources)
@@ -942,9 +942,9 @@ def main() -> int:
     expected = build_spec(contract)
 
     if args.write_spec:
-        SPEC_PATH.write_text(format_spec(expected))
+        SPEC_PATH.write_text(format_spec(expected), encoding="utf-8", newline="\n")
         digest = fingerprint(expected)
-        FINGERPRINT_PATH.write_text(digest + "\n")
+        FINGERPRINT_PATH.write_text(digest + "\n", encoding="utf-8", newline="\n")
         print(
             f"spec written: {len(expected['functions'])} operations, "
             f"{len(expected['structs'])} structs, {len(expected['enums'])} enums, "
@@ -953,15 +953,15 @@ def main() -> int:
         )
         return 0
 
-    spec = json.loads(SPEC_PATH.read_text())
+    spec = json.loads(SPEC_PATH.read_text(encoding="utf-8"))
     problems = compare(spec, expected)
 
     digest = fingerprint(spec)
     if args.update_fingerprint:
-        FINGERPRINT_PATH.write_text(digest + "\n")
+        FINGERPRINT_PATH.write_text(digest + "\n", encoding="utf-8", newline="\n")
         print(f"fingerprint updated: {digest}")
     else:
-        recorded = FINGERPRINT_PATH.read_text().strip() if FINGERPRINT_PATH.exists() else ""
+        recorded = FINGERPRINT_PATH.read_text(encoding="utf-8").strip() if FINGERPRINT_PATH.exists() else ""
         if recorded != digest:
             problems.append(
                 f"spec fingerprint mismatch: recorded={recorded or '<missing>'} "
